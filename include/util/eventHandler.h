@@ -1,7 +1,7 @@
 #ifndef EVENT_HANDLER_H
 #define EVENT_HANDLER_H
 
-inline constexpr uint FPS = 60;
+inline constexpr unsigned int FPS = 60;
 
 #include <queue>
 

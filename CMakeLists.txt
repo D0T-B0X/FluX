@@ -13,6 +13,7 @@ set(SPHERE_FPATH "${SHADER_DIR}/fSphere.glsl")
 set(MESH_SRC_DIR "${CMAKE_SOURCE_DIR}/src/Mesh")
 set(RENDERER_SRC_DIR "${CMAKE_SOURCE_DIR}/src/Renderer")
 set(PHYSICS_SRC_DIR "${CMAKE_SOURCE_DIR}/src/Physics")
+set(UTIL_SRC_DIR "${CMAKE_SOURCE_DIR}/src/util")
 
 configure_file(
     ${CMAKE_SOURCE_DIR}/config.h.in
@@ -26,8 +27,11 @@ add_executable(
     ${RENDERER_SRC_DIR}/renderer.cpp
     ${RENDERER_SRC_DIR}/camera.cpp
     ${RENDERER_SRC_DIR}/shader.cpp
+    ${RENDERER_SRC_DIR}/test.cpp
     ${PHYSICS_SRC_DIR}/physics.cpp
+    ${UTIL_SRC_DIR}/eventHandler.cpp
     ${CMAKE_SOURCE_DIR}/src/application.cpp
+    ${CMAKE_SOURCE_DIR}/src/main.cpp
     ${CMAKE_SOURCE_DIR}/src/glad.c
 )
 
