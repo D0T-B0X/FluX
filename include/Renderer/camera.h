@@ -14,8 +14,8 @@ public:
 
 private:
     bool        first = true;
-    double      lastX;
-    double      lastY;
+    double      lastX = 0.0f;
+    double      lastY = 0.0f;
     
     glm::vec3   cameraPosition;
 

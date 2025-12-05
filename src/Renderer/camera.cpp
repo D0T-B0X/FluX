@@ -1,6 +1,6 @@
 #include "Renderer/camera.h"
 
-Camera::Camera() : cameraPosition(glm::vec3(0.0f, 0.0f, 0.0f)) { }
+Camera::Camera() : cameraPosition(glm::vec3(0.0f)) { }
 Camera::Camera(glm::vec3 position) : cameraPosition(position) { }
 
 void Camera::setCameraPosition(glm::vec3 position) {
