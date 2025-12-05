@@ -1,18 +1,22 @@
 #ifndef EVENT_HANDLER_H
 #define EVENT_HANDLER_H
 
-inline constexpr unsigned int FPS = 60;
+typedef void (*ActionCallBack)();
+typedef unsigned int uint;
 
 #include <queue>
 
-typedef void (*ActionCallBack)();
-typedef unsigned int uint;
+inline constexpr unsigned int FPS = 60;
 
 struct Event {
     uint             uid;
     uint             priority;
     uint             activationFrame;
     ActionCallBack   handler;
+
+    bool operator<(const Event& other) const {
+        return priority < other.priority;
+    }
 };
 
 class EventHandler {

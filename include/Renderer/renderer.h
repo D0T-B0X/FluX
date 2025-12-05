@@ -30,6 +30,7 @@ private:
     // ------------ Helper libaries --------------
     GLFWwindow   *window;
     Shader        shader;
+    Test          test;
     Scene&        renderScene;
     Sphere3D      globalSphere;
     
