@@ -9,8 +9,8 @@ layout (location = 4) in float  fEmitter;
 out vec3  inColor;
 out float emitter;
 
-uniform mat4 view;
-uniform mat4 projection;
+// uniform mat4 view;
+// uniform mat4 projection;
 
 void main() {
     // ----------- Fragment Shader Data ---------- 

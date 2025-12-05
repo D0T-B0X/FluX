@@ -31,7 +31,6 @@ add_executable(
     ${PHYSICS_SRC_DIR}/physics.cpp
     ${UTIL_SRC_DIR}/eventHandler.cpp
     ${CMAKE_SOURCE_DIR}/src/application.cpp
-    ${CMAKE_SOURCE_DIR}/src/main.cpp
     ${CMAKE_SOURCE_DIR}/src/glad.c
 )
 
