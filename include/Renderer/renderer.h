@@ -9,7 +9,6 @@
 #include "config.h"
 #include "shader.h"
 #include "camera.h"
-#include "test.h"
 #include "settings.h"
 
 // Import scene data
@@ -28,18 +27,18 @@ public:
 
 private:
     // ------------ Helper libaries --------------
-    GLFWwindow   *window;
+    GLFWwindow   *window             = nullptr;
     Shader        shader;
-    Test          test;
+    Camera        camera;
     Scene&        renderScene;
     Sphere3D      globalSphere;
     
     // --------- Mesh specific variables ---------
-    uint          sphereIndexCount;
-    uint          uVAO;
-    uint          uVBO;
-    uint          uInstancedVBO;
-    uint          uEBO;
+    uint          sphereIndexCount   =     0;
+    uint          uVAO               =     0;
+    uint          uVBO               =     0;
+    uint          uInstancedVBO      =     0;
+    uint          uEBO               =     0;
 
     // -------------- I/O functions -------------- 
     void          createWindow();

@@ -27,7 +27,6 @@ add_executable(
     ${RENDERER_SRC_DIR}/renderer.cpp
     ${RENDERER_SRC_DIR}/camera.cpp
     ${RENDERER_SRC_DIR}/shader.cpp
-    ${RENDERER_SRC_DIR}/test.cpp
     ${PHYSICS_SRC_DIR}/physics.cpp
     ${UTIL_SRC_DIR}/eventHandler.cpp
     ${CMAKE_SOURCE_DIR}/src/application.cpp
