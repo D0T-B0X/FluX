@@ -1,7 +1,14 @@
 #include "Mesh/Sphere3D.h"
 
 // ____ Constructors ____
-Sphere3D::Sphere3D() : uSubdivisions(16) {
+Sphere3D::Sphere3D() 
+    :
+    uSubdivisions(8), 
+    uPointsPerRow(0),
+    uPointsPerFace(0),
+    bDirtyMesh(false),
+    fRadius(EPSILON)   
+{
     // Two extra points per row for start and end
     uPointsPerRow = uSubdivisions + 2;
 
@@ -11,7 +18,14 @@ Sphere3D::Sphere3D() : uSubdivisions(16) {
     buildSphere();
 }
 
-Sphere3D::Sphere3D(uint subdivs) : uSubdivisions(subdivs) {
+Sphere3D::Sphere3D(uint subdivs) 
+    :
+    uSubdivisions(subdivs), 
+    uPointsPerRow(0),
+    uPointsPerFace(0),
+    bDirtyMesh(false),
+    fRadius(EPSILON)  
+{
     uPointsPerRow = uSubdivisions + 2;
     uPointsPerFace = uPointsPerRow * uPointsPerRow; 
 
@@ -43,6 +57,14 @@ uint Sphere3D::getSubdivisions() {
     return uSubdivisions;
 }
 
+float Sphere3D::getRadius() {
+    return fRadius;
+}
+
+bool Sphere3D::isMeshDrity() {
+    return bDirtyMesh;
+}
+
 // ____ Setter functions ____
 void Sphere3D::setSubdivision(uint uSubdivs) {
     uSubdivisions = uSubdivs;
@@ -51,6 +73,15 @@ void Sphere3D::setSubdivision(uint uSubdivs) {
     uPointsPerFace = uPointsPerRow * uPointsPerRow;
 
     buildSphere();
+}
+
+void Sphere3D::setRadius(float radius) {
+    if (radius < EPSILON) {
+        radius = EPSILON;
+    }
+
+    bDirtyMesh = true;
+    fRadius = radius;
 }
 
 // ____ Sphere Generation ____

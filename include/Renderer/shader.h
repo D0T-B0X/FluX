@@ -16,6 +16,8 @@ enum MeshType {
 
 class Shader {
 public:
+    Shader();
+
     void load(MeshType type, const char* vertexPath, const char* fragmentPath);
     void use(MeshType type);
     void setBool(MeshType type, const char* name, int val);

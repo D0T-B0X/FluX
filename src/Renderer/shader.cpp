@@ -1,5 +1,11 @@
 #include "Renderer/shader.h"
 
+Shader::Shader()
+    :
+    SphereID(0),
+    SurfaceID(0)
+    { }
+
 void Shader::load(MeshType type, const char* vertexPath, const char* fragmentPath) {
     std::string vertexCode;
     std::string fragmentCode;
@@ -67,27 +73,27 @@ void Shader::use(MeshType type) {
 
 void Shader::setBool(MeshType type, const char* name, int val) {
     uint& ID = type == SURFACE ? SurfaceID : SphereID;
-    glUniform1i(glGetUniformLocation(ID, name), val);
+    glProgramUniform1i(ID, glGetUniformLocation(ID, name), val);
 }
 
 void Shader::setInt(MeshType type, const char* name, int val) {
     uint& ID = type == SURFACE ? SurfaceID : SphereID;
-    glUniform1i(glGetUniformLocation(ID, name), val);
+    glProgramUniform1i(ID, glGetUniformLocation(ID, name), val);
 }
 
 void Shader::setFloat(MeshType type, const char* name, float val) {
     uint& ID = type == SURFACE ? SurfaceID : SphereID;
-    glUniform1f(glGetUniformLocation(ID, name), val); 
+    glProgramUniform1f(ID, glGetUniformLocation(ID, name), val); 
 }
 
 void Shader::setVec3(MeshType type, const char* name, glm::vec3 vec) {
     uint& ID = type == SURFACE ? SurfaceID : SphereID;
-    glUniform3fv(glGetUniformLocation(ID, name), 1, glm::value_ptr(vec));
+    glProgramUniform3fv(ID, glGetUniformLocation(ID, name), 1, glm::value_ptr(vec));
 }
 
 void Shader::setMat4(MeshType type, const char* name, glm::mat4 mat) {
     uint& ID = type == SURFACE ? SurfaceID : SphereID;
-    glUniformMatrix4fv(glGetUniformLocation(ID, name), 1, GL_FALSE, glm::value_ptr(mat));
+    glProgramUniformMatrix4fv(ID, glGetUniformLocation(ID, name), 1, GL_FALSE, glm::value_ptr(mat));
 }
 
 void Shader::checkCompileErrors(uint shader, const char* type, MeshType mType) {

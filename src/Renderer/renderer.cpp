@@ -1,6 +1,16 @@
 #include "Renderer/renderer.h"
 
-Renderer::Renderer(Scene& activeScene) : renderScene(activeScene) {
+Renderer::Renderer(Scene& activeScene) 
+    :
+    window(nullptr), 
+    renderScene(activeScene),
+    uploadRadiusUniform(false),
+    sphereIndexCount(0),
+    uVAO(0),
+    uVBO(0),
+    uInstancedVBO(0),
+    uEBO(0)
+{
 
     // Initialize OpenGL with version 4.6
     glfwInit();
@@ -25,9 +35,15 @@ Renderer::Renderer(Scene& activeScene) : renderScene(activeScene) {
     shader.load(SURFACE, SURFACE_VSHADER_PATH, SURFACE_FSHADER_PATH);
 
     uploadSphereMesh();
+    setUniforms();
 }
 
 void Renderer::renderFrame() {
+    // Scene timing update
+    renderScene.currTime = glfwGetTime();
+    renderScene.dt = renderScene.currTime - renderScene.lastTime;
+    renderScene.lastTime = renderScene.currTime;
+
     processKeyboardInput();
 
     // Clear frame
@@ -41,34 +57,55 @@ void Renderer::renderFrame() {
 }
 
 void Renderer::setSphereSubdivisions(uint subdivs) {
-    globalSphere.setSubdivision(subdivs);
+    renderScene.getGlobalSphere().setSubdivision(subdivs);
 
     glBindVertexArray(uVAO);
 
     glBindBuffer(GL_ARRAY_BUFFER, uVBO);
     glBufferData(
         GL_ARRAY_BUFFER, 
-        globalSphere.getVerticesSize(), 
-        globalSphere.getVertices(), 
+        renderScene.getGlobalSphere().getVerticesSize(), 
+        renderScene.getGlobalSphere().getVertices(), 
         GL_STATIC_DRAW
     );
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, uEBO);
     glBufferData(
         GL_ELEMENT_ARRAY_BUFFER,
-        globalSphere.getIndicesSize(),
-        globalSphere.getIndices(),
+        renderScene.getGlobalSphere().getIndicesSize(),
+        renderScene.getGlobalSphere().getIndices(),
         GL_STATIC_DRAW
     );
 
-    this->sphereIndexCount = globalSphere.getIndexCount();
+    this->sphereIndexCount = renderScene.getGlobalSphere().getIndexCount();
     glBindVertexArray(0);
+}
+
+void Renderer::setUniforms() {
+    // Set Sphere Uniforms
+    shader.use(SPHERE);
+
+    shader.setFloat(SPHERE, "fRadius", renderScene.getGlobalSphere().getRadius());
+    // Test light source
+    shader.setVec3(SPHERE, "lightSourcePosition", glm::vec3(2.0f, 2.0f, 3.0f));
+    shader.setVec3(SPHERE, "lightColor", glm::vec3(1.0f, 1.0f, 1.0f));
+
+    // Set Surface Uniforms
+    shader.use(SURFACE); // TODO => Make separate function for surfaces
 }
 
 void Renderer::drawSpheres() {
     if (renderScene.hasNoSpheres()) { return; }
 
     shader.use(SPHERE);
+
+    if (renderScene.getGlobalSphere().isMeshDrity()) {
+        shader.setFloat(SPHERE, "fRadius", renderScene.getGlobalSphere().getRadius());
+    }
+
+    shader.setMat4(SPHERE, "view", camera.generateViewMatrix());
+    shader.setMat4(SPHERE, "projection", camera.generateProjectionMatrix());
+
     glBindVertexArray(uVAO);
 
     glBindBuffer(GL_ARRAY_BUFFER, uInstancedVBO);
@@ -125,13 +162,29 @@ void Renderer::loadGLAD() {
 }
 
 void Renderer::processKeyboardInput() {
+    float dt = renderScene.dt;
+
+    if (glfwGetKey(this->window, GLFW_KEY_W) == GLFW_PRESS) {
+        camera.processKeyboardInput(Direction::FORWARD, dt);
+    }
+    if (glfwGetKey(this->window, GLFW_KEY_S) == GLFW_PRESS) {
+        camera.processKeyboardInput(Direction::BACKWARD, dt);
+    }
+    if (glfwGetKey(this->window, GLFW_KEY_A) == GLFW_PRESS) {
+        camera.processKeyboardInput(Direction::LEFT, dt);
+    }
+    if (glfwGetKey(this->window, GLFW_KEY_D) == GLFW_PRESS) {
+        camera.processKeyboardInput(Direction::RIGHT, dt);
+    }
+    if (glfwGetKey(this->window, GLFW_KEY_SPACE) == GLFW_PRESS) {
+        camera.processKeyboardInput(Direction::UP, dt);
+    }
+    if (glfwGetKey(this->window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
+        camera.processKeyboardInput(Direction::DOWN, dt);
+    }
     if (glfwGetKey(this->window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, GL_TRUE);
     }
-}
-
-void Renderer::processMouseInput(double xpos, double ypos) {
-
 }
 
 void Renderer::uploadSphereMesh() {
@@ -149,8 +202,8 @@ void Renderer::uploadSphereMesh() {
     glBindBuffer(GL_ARRAY_BUFFER, uVBO);
     glBufferData(
         GL_ARRAY_BUFFER, 
-        globalSphere.getVerticesSize(),
-        globalSphere.getVertices(),
+        renderScene.getGlobalSphere().getVerticesSize(),
+        renderScene.getGlobalSphere().getVertices(),
         GL_STATIC_DRAW
     );
 
@@ -171,30 +224,24 @@ void Renderer::uploadSphereMesh() {
     glEnableVertexAttribArray(2);
     glVertexAttribDivisor(2, 1);
 
-    // Location 3: float radius (offset 24)
-    glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, sizeof(SphereInstanceData), (void*)offsetof(SphereInstanceData, fRadius));
-    glEnableVertexAttribArray(3);
-    glVertexAttribDivisor(3, 1);
-
-    // Location 4: float emitter (offset 28)
-    glVertexAttribPointer(4, 1, GL_FLOAT, GL_FALSE, sizeof(SphereInstanceData), (void*)offsetof(SphereInstanceData, fEmitter));
-    glEnableVertexAttribArray(4);
-    glVertexAttribDivisor(4, 1);
-
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, uEBO);
     glBufferData(
         GL_ELEMENT_ARRAY_BUFFER,
-        globalSphere.getIndicesSize(),
-        globalSphere.getIndices(),
+        renderScene.getGlobalSphere().getIndicesSize(),
+        renderScene.getGlobalSphere().getIndices(),
         GL_STATIC_DRAW
     );
 
-    this->sphereIndexCount = globalSphere.getIndexCount();
+    this->sphereIndexCount = renderScene.getGlobalSphere().getIndexCount();
 
     glBindVertexArray(0);
 }
 
 void Renderer::cursorPositionCallback(GLFWwindow* window, double xpos, double ypos) {
-    Renderer* renderer = static_cast<Renderer*>(glfwGetWindowUserPointer(window));
-    if (renderer) { renderer->processMouseInput(xpos, ypos); }
+    Renderer* self = static_cast<Renderer*>(glfwGetWindowUserPointer(window));
+    if (!self) return;
+    self->camera.mousePosition.x = xpos;
+    self->camera.mousePosition.y = ypos;
+
+    self->camera.processMouseInput();
 }

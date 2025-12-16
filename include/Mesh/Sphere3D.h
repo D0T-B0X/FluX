@@ -2,6 +2,7 @@
 #define SPHERE_3D_H
 
 #include <vector>
+#include <iostream>
 #include <glm/glm.hpp>
 
 typedef unsigned int uint;
@@ -30,14 +31,19 @@ public:
     uint      getIndicesSize();
     uint      getIndexCount();
     uint      getSubdivisions();
+    float     getRadius();
+    bool      isMeshDrity();
 
     // Setter functions
     void setSubdivision(uint uSubdivs);
+    void setRadius(float radius);
 
 private:
-    uint                 uSubdivisions;
-    uint                 uPointsPerRow;
+    uint                 uSubdivisions; 
+    uint                 uPointsPerRow; 
     uint                 uPointsPerFace;
+    bool                 bDirtyMesh;
+    float                fRadius;
     std::vector<float>   vfVertices;
     std::vector<uint>    vuIndices;
 

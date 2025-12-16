@@ -14,9 +14,15 @@
 
 #include <string>
 
-inline const char* NAME = "FluX";
+// -------- OpenGL Window Settings ---------
+inline const char*         NAME                 =       "FluX";
 
-inline const unsigned int SCR_WIDTH = 1920;
-inline const unsigned int SCR_HEIGHT = 1200;
+inline const unsigned int  SCR_WIDTH            =       1920;
+inline const unsigned int  SCR_HEIGHT           =       1200;
+
+// -------- Camera Settings----------
+inline constexpr float     FOV                  =       90.0f;
+inline constexpr float     MOUSE_SENSITIVITY    =       0.5f;   
+inline constexpr float     MOVEMENT_SPEED       =       1.0f;
 
 #endif

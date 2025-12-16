@@ -23,13 +23,14 @@ configure_file(
 add_executable(
     ${PROJECT_NAME}
     ${CMAKE_SOURCE_DIR}/src/main.cpp
+    ${CMAKE_SOURCE_DIR}/src/scene.cpp
+    ${CMAKE_SOURCE_DIR}/src/application.cpp
     ${MESH_SRC_DIR}/Sphere3D.cpp
     ${RENDERER_SRC_DIR}/renderer.cpp
     ${RENDERER_SRC_DIR}/camera.cpp
     ${RENDERER_SRC_DIR}/shader.cpp
     ${PHYSICS_SRC_DIR}/physics.cpp
     ${UTIL_SRC_DIR}/eventHandler.cpp
-    ${CMAKE_SOURCE_DIR}/src/application.cpp
     ${CMAKE_SOURCE_DIR}/src/glad.c
 )
 
