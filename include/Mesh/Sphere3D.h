@@ -6,7 +6,8 @@
 #include <glm/glm.hpp>
 
 typedef unsigned int uint;
-inline constexpr float EPSILON = 1e-3;
+
+inline constexpr float EPSILON = 1e-8;
 
 #define POS  1
 #define NEG -1
@@ -22,21 +23,22 @@ public:
     Sphere3D();
     Sphere3D(uint subdivs);
 
-    void buildSphere();
+    void                 buildSphere();
 
     // Getter functions
-    float*    getVertices();
-    uint      getVerticesSize();
-    uint*     getIndices();
-    uint      getIndicesSize();
-    uint      getIndexCount();
-    uint      getSubdivisions();
-    float     getRadius();
-    bool      isMeshDrity();
+    float*               getVertices();
+    uint                 getVerticesSize();
+    uint*                getIndices();
+    uint                 getIndicesSize();
+    uint                 getIndexCount();
+    uint                 getSubdivisions();
+    float                getRadius();
+    bool                 isMeshDrity();
 
     // Setter functions
-    void setSubdivision(uint uSubdivs);
-    void setRadius(float radius);
+    void                 setSubdivision(uint uSubdivs);
+    void                 setRadius(float radius);
+    void                 setMeshDirtyStatus();
 
 private:
     uint                 uSubdivisions; 

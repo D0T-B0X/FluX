@@ -9,9 +9,15 @@ public:
     Physics(Scene& activeScene);
 
     void         cleanup();
+    void         initSSBO();
 
 private:
     Scene&       physicsScene;
+
+    void         createPhysicsProgram();
+    void         setPhysicsFloat(const char* name, float val);
+
+    GLuint       physicsProgram;
 };
 
 #endif

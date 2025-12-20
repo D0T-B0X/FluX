@@ -4,7 +4,8 @@ Scene::Scene()
     :
     dt(0.0f),
     currTime(0.0f),
-    lastTime(0.0f)
+    lastTime(0.0f),
+    particleSSBO(0)
     { }
 
 Sphere3D& Scene::getGlobalSphere() {
@@ -13,6 +14,14 @@ Sphere3D& Scene::getGlobalSphere() {
 
 void Scene::addSphere(SphereInstanceData sphere) {
     Spheres.push_back(sphere);
+}
+
+void Scene::addSurface(SurfaceInstanceData surface) {
+    Surfaces.push_back(surface);
+}
+
+SurfaceInstanceData Scene::createSurface(sNormal normal, uint density, float distance) {
+    return surfaceMesh.generateSurface(normal, density, distance);
 }
 
 bool Scene::hasNoSpheres() {

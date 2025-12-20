@@ -10,6 +10,7 @@ set(SURFACE_VPATH "${SHADER_DIR}/vSurface.glsl")
 set(SURFACE_FPATH "${SHADER_DIR}/fSurface.glsl")
 set(SPHERE_VPATH "${SHADER_DIR}/vSphere.glsl")
 set(SPHERE_FPATH "${SHADER_DIR}/fSphere.glsl")
+set(PHYSICS_CPATH "${SHADER_DIR}/physics.comp")
 set(MESH_SRC_DIR "${CMAKE_SOURCE_DIR}/src/Mesh")
 set(RENDERER_SRC_DIR "${CMAKE_SOURCE_DIR}/src/Renderer")
 set(PHYSICS_SRC_DIR "${CMAKE_SOURCE_DIR}/src/Physics")
@@ -26,6 +27,7 @@ add_executable(
     ${CMAKE_SOURCE_DIR}/src/scene.cpp
     ${CMAKE_SOURCE_DIR}/src/application.cpp
     ${MESH_SRC_DIR}/Sphere3D.cpp
+    ${MESH_SRC_DIR}/Surface3D.cpp
     ${RENDERER_SRC_DIR}/renderer.cpp
     ${RENDERER_SRC_DIR}/camera.cpp
     ${RENDERER_SRC_DIR}/shader.cpp

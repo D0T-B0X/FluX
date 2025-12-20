@@ -14,6 +14,7 @@ public:
     Renderer(Scene& activeScene);
 
     void          renderFrame();
+    void          uploadSphereMesh();
     void          setSphereSubdivisions(uint subdivs);
     void          setUniforms();
     void          drawSpheres();
@@ -41,7 +42,6 @@ private:
     void          loadGLAD();
     void          processKeyboardInput();
     void          processMouseInput();
-    void          uploadSphereMesh();
     static void   cursorPositionCallback(GLFWwindow* window, double xpos, double ypos);
 };
 

@@ -44,6 +44,14 @@ void Renderer::renderFrame() {
     renderScene.dt = renderScene.currTime - renderScene.lastTime;
     renderScene.lastTime = renderScene.currTime;
 
+    if (renderScene.getGlobalSphere().isMeshDrity()) {
+        shader.setFloat(SPHERE, "fRadius", renderScene.getGlobalSphere().getRadius());
+        renderScene.getGlobalSphere().setMeshDirtyStatus();
+    }
+
+    shader.setMat4(SPHERE, "view", camera.generateViewMatrix());
+    shader.setMat4(SPHERE, "projection", camera.generateProjectionMatrix());
+
     processKeyboardInput();
 
     // Clear frame
@@ -51,6 +59,7 @@ void Renderer::renderFrame() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     drawSpheres();
+    drawSurfaces();
 
     glfwSwapBuffers(window);
     glfwPollEvents();
@@ -98,33 +107,14 @@ void Renderer::drawSpheres() {
     if (renderScene.hasNoSpheres()) { return; }
 
     shader.use(SPHERE);
+    static int count = 0;
 
     if (renderScene.getGlobalSphere().isMeshDrity()) {
         shader.setFloat(SPHERE, "fRadius", renderScene.getGlobalSphere().getRadius());
+        renderScene.getGlobalSphere().setMeshDirtyStatus();
     }
 
-    shader.setMat4(SPHERE, "view", camera.generateViewMatrix());
-    shader.setMat4(SPHERE, "projection", camera.generateProjectionMatrix());
-
     glBindVertexArray(uVAO);
-
-    glBindBuffer(GL_ARRAY_BUFFER, uInstancedVBO);
-
-    // Orphan memory
-    glBufferData(
-        GL_ARRAY_BUFFER, 
-        renderScene.getSpheresDataSize(), 
-        NULL, 
-        GL_STREAM_DRAW
-    );
-
-    // Fill orphan memory with struct data
-    glBufferSubData(
-        GL_ARRAY_BUFFER,
-        0,
-        renderScene.getSpheresDataSize(),
-        renderScene.getSpheresData()
-    );
 
     glDrawElementsInstanced(
         GL_TRIANGLES, 
@@ -135,6 +125,10 @@ void Renderer::drawSpheres() {
     );
 
     glBindVertexArray(0);
+}
+
+void Renderer::drawSurfaces() {
+    shader.use(SURFACE);
 }
 
 bool Renderer::shouldEnd() {
@@ -192,7 +186,6 @@ void Renderer::uploadSphereMesh() {
     if (!this->uVAO) {
         glGenVertexArrays(1, &uVAO);
         glGenBuffers(1, &uVBO);
-        glGenBuffers(1, &uInstancedVBO);
         glGenBuffers(1, &uEBO);
     }
 
@@ -212,17 +205,22 @@ void Renderer::uploadSphereMesh() {
     glEnableVertexAttribArray(0);
 
     // Instanced data attributes
-    glBindBuffer(GL_ARRAY_BUFFER, uInstancedVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, renderScene.particleSSBO);
 
-    // Location 1: vec3 position (offset 0)
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(SphereInstanceData), (void*)offsetof(SphereInstanceData, fv3Position));
+    // Location 1: xyz position, w mass (offset 0)
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(SphereInstanceData), (void*)offsetof(SphereInstanceData, position_mass));
     glEnableVertexAttribArray(1);
     glVertexAttribDivisor(1, 1); // One per instance
 
-    // Location 2: vec3 color (offset 12)
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(SphereInstanceData), (void*)offsetof(SphereInstanceData, fv3Color));
+    // Location 2: xyz color, w radius (offset 16)
+    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(SphereInstanceData), (void*)offsetof(SphereInstanceData, color_padding));
     glEnableVertexAttribArray(2);
     glVertexAttribDivisor(2, 1);
+
+    // Location 3: xyz velocity, w padding (offset 32)
+    glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(SphereInstanceData), (void*)offsetof(SphereInstanceData, velocity_padding));
+    glEnableVertexAttribArray(3);
+    glVertexAttribDivisor(3, 1);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, uEBO);
     glBufferData(

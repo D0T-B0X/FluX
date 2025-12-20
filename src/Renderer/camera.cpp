@@ -2,7 +2,7 @@
 
 Camera::Camera() 
     : 
-    cameraPosition(glm::vec3(0.0f)), 
+    cameraPosition(glm::vec3(0.0f, 0.0f, 0.0f)), 
     lastX(0.0),
     lastY(0.0),
     first(true),
@@ -57,8 +57,8 @@ glm::mat4 Camera::generateProjectionMatrix() {
     return glm::perspective(
         glm::radians(FOV), 
         aspect, 
-        0.1f, 
-        100.0f
+        0.01f, 
+        1000.0f
     );
 }
 

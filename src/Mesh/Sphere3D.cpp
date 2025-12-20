@@ -3,7 +3,7 @@
 // ____ Constructors ____
 Sphere3D::Sphere3D() 
     :
-    uSubdivisions(8), 
+    uSubdivisions(4), 
     uPointsPerRow(0),
     uPointsPerFace(0),
     bDirtyMesh(false),
@@ -84,8 +84,15 @@ void Sphere3D::setRadius(float radius) {
     fRadius = radius;
 }
 
+void Sphere3D::setMeshDirtyStatus() {
+    bDirtyMesh = false;
+}
+
 // ____ Sphere Generation ____
 void Sphere3D::buildSphere() {
+    vfVertices.clear();
+    vuIndices.clear();
+
     std::vector<float> fvTmpVertices;
     for (int face = 0; face < 6; ++face) {
         switch (face) {

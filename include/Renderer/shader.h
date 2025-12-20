@@ -30,6 +30,7 @@ private:
 
     uint SphereID;
     uint SurfaceID; 
+    uint PhysicsID;
 
     void checkCompileErrors(uint shader, const char* type, MeshType mType);
 };
