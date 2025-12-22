@@ -5,8 +5,11 @@ App::App() : rEngine(activeScene), pEngine(activeScene) { }
 
 void App::run() {  
     setup();
+    pEngine.initSSBO();
+    rEngine.uploadSphereMesh();
     
     while (!rEngine.shouldEnd()) {
+        pEngine.updateFrame();
         rEngine.renderFrame();
     }
 
@@ -15,49 +18,59 @@ void App::run() {
 }
 
 void App::setup() {
-    activeScene.getGlobalSphere().setRadius(1.0f);
+    // Set the global sphere radius 
+    activeScene.getGlobalSphere().setRadius(0.5f);
 
-    const int maxParticles = 100000;
-    const float minBound = -1000.0f;
-    const float maxBound =  1000.0f;
+    const int gridX = 60;
+    const int gridY = 60;
+    const int gridZ = 60;
+    const int maxParticles = 100000000;
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<float> dis(minBound, maxBound);
+    // Grid bounds
+    const float minBound = -50.0f;
+    const float maxBound =  50.0f;
+    const float range = maxBound - minBound;
 
-    for (int i = 0; i < maxParticles; ++i) {
-        SphereInstanceData particle;
+    // Spacing between particles
+    const float spacingX = range / (float)(gridX - 1);
+    const float spacingY = range / (float)(gridY - 1);
+    const float spacingZ = range / (float)(gridZ - 1);
 
-        float particleMass = 1.0f;
+    int particleCount = 0;
 
-        // Calculate position
-        particle.position_mass = glm::vec4(
-            dis(gen),
-            dis(gen),
-            dis(gen),
-            particleMass
-        );
+    for (int x = 0; x < gridX && particleCount < maxParticles; ++x) {
+        for (int y = 0; y < gridY && particleCount < maxParticles; ++y) {
+            for (int z = 0; z < gridZ && particleCount < maxParticles; ++z) {
+                SphereInstanceData particle;
 
-        // Color white
-        particle.color_padding = glm::vec4(
-            1.0f,
-            1.0f,
-            1.0f,
-            0.0f
-        );
+                // Calculate position
+                particle.position_mass = glm::vec4(
+                    minBound + x * spacingX,
+                    minBound + y * spacingY,
+                    minBound + z * spacingZ,
+                    0.0f
+                );
 
-        particle.velocity_padding = glm::vec4(
-            0.0f,
-            0.0f,
-            0.0f,
-            0.0f 
-        );
+                // Color based on position (gradient effect)
+                particle.color_padding = glm::vec4(
+                    (float)x / (float)gridX,
+                    (float)y / (float)gridY,
+                    (float)z / (float)gridZ,
+                    0.0f
+                );
 
-        activeScene.addSphere(particle);
+                particle.velocity_padding = glm::vec4(
+                    0.0f,
+                    0.0f,
+                    0.0f,
+                    0.0
+                );
+
+                activeScene.addSphere(particle);
+                ++particleCount;
+            }
+        }
     }
-
-    pEngine.initSSBO();
-    rEngine.uploadSphereMesh();
 
     /*
     SurfaceInstanceData testSurface;

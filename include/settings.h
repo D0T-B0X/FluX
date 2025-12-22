@@ -23,6 +23,6 @@ inline const unsigned int  SCR_HEIGHT           =       1200;
 // -------- Camera Settings----------
 inline constexpr float     FOV                  =       90.0f;
 inline constexpr float     MOUSE_SENSITIVITY    =       0.5f;   
-inline constexpr float     MOVEMENT_SPEED       =       1.0f;
+inline constexpr float     MOVEMENT_SPEED       =       10.0f;
 
 #endif

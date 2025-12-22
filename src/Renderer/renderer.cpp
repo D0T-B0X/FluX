@@ -2,6 +2,7 @@
 
 Renderer::Renderer(Scene& activeScene) 
     :
+    camera(glm::vec3(0.0f, 0.0f, 80.0f)),
     window(nullptr), 
     renderScene(activeScene),
     uploadRadiusUniform(false),

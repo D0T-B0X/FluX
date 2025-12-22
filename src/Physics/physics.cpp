@@ -3,7 +3,26 @@
 Physics::Physics(Scene& activeScene) 
     : 
     physicsScene(activeScene) 
-    { }
+{ 
+    shader.load(PHYSICS_CSHADER_PATH);
+}
+
+void Physics::updateFrame() {
+    shader.use();
+    shader.setFloat("dt", physicsScene.dt);
+
+    glBindBufferBase(
+        GL_SHADER_STORAGE_BUFFER, 
+        0, 
+        physicsScene.particleSSBO
+    );
+
+    int numGroups = (physicsScene.getSpheresSize() + 127) / 128;
+
+    glDispatchCompute(numGroups, 1, 1);
+
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+}
 
 void Physics::cleanup() {
     
@@ -31,8 +50,4 @@ void Physics::initSSBO() {
     );
 
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-}
-
-void Physics::createPhysicsProgram() {
-    physicsProgram = glCreateProgram();
 }

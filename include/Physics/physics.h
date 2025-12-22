@@ -3,21 +3,20 @@
 
 #include <glm/glm.hpp>
 #include "scene.h"
+#include "config.h"
+#include "Renderer/shader.h"
 
 class Physics {
 public: 
     Physics(Scene& activeScene);
 
+    void         updateFrame();
     void         cleanup();
     void         initSSBO();
 
 private:
     Scene&       physicsScene;
-
-    void         createPhysicsProgram();
-    void         setPhysicsFloat(const char* name, float val);
-
-    GLuint       physicsProgram;
+    Shader       shader;
 };
 
 #endif

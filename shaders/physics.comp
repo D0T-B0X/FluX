@@ -13,6 +13,7 @@ layout (std430, binding = 0) buffer ParticleBuffer {
 };
 
 uniform float dt;
+uniform bool  reset;
 
 void main() {
     uint i = gl_GlobalInvocationID.x;
@@ -29,7 +30,7 @@ void main() {
 
     float floor = -20.0;
     if (position.y < floor) {
-        position.y = floor;
+        position.y = floor + 0.001;
         velocity *= -0.8;
     }
 
