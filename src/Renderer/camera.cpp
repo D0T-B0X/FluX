@@ -1,4 +1,5 @@
 #include "Renderer/camera.h"
+#include <iostream>
 
 Camera::Camera() 
     : 
@@ -10,6 +11,7 @@ Camera::Camera()
     pitch(0.0f),
     front(glm::vec3(1.0f, 0.0f, 0.0f))
 {
+    std::cout << "Run camera" << std::endl;
     updateCameraVectors();
 }
 

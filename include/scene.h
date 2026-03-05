@@ -1,6 +1,8 @@
 #ifndef SCENE_H
 #define SCENE_H
 
+#define FLOOR -20.0f
+
 #include "Object/body.h"
 
 // OpenGL and GLFW helper libraries
@@ -23,14 +25,14 @@ public:
     Sphere3D&                           getGlobalSphere();
 
     // -------- Sphere control functions ---------
-    void                                addSphere(SphereInstanceData sphere);
+    void                                addSphere(Particle sphere);
     void                                addSurface(SurfaceInstanceData surface);
     SurfaceInstanceData                 createSurface(sNormal normal, uint density, float distance);
     bool                                hasNoSpheres();
     unsigned int                        getSpheresDataSize();
     unsigned int                        getSpheresSize();
     const void*                         getSpheresData();
-    std::vector<SphereInstanceData>&    getSpheres();
+    std::vector<Particle>&              getSpheres();
 
 private:
     // Global sphere mesh
@@ -39,7 +41,7 @@ private:
     Surface3D                           surfaceMesh;   
 
     // Holds all sphere data in the simulation
-    std::vector<SphereInstanceData>     Spheres;
+    std::vector<Particle>               Spheres;
 
     // Holds all surface instances in the sim
     std::vector<SurfaceInstanceData>    Surfaces; 

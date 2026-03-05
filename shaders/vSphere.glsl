@@ -2,8 +2,9 @@
 
 layout (location = 0) in vec3   aPos;
 layout (location = 1) in vec4   position_mass;
-layout (location = 2) in vec4   color_padding;
-layout (location = 3) in vec4   velocity_padding;
+layout (location = 2) in vec4   velocity_density;
+layout (location = 3) in vec4   force_pressure;
+layout (location = 4) in vec4   color_padding;
 
 out vec3  inColor;
 out vec3  normalPos;

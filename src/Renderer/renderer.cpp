@@ -2,7 +2,7 @@
 
 Renderer::Renderer(Scene& activeScene) 
     :
-    camera(glm::vec3(0.0f, 0.0f, 80.0f)),
+    camera(glm::vec3(0.0f, 0.0f, 20.0f)),
     window(nullptr), 
     renderScene(activeScene),
     uploadRadiusUniform(false),
@@ -35,7 +35,6 @@ Renderer::Renderer(Scene& activeScene)
     shader.load(SPHERE, SPHERE_VSHADER_PATH, SPHERE_FSHADER_PATH);
     shader.load(SURFACE, SURFACE_VSHADER_PATH, SURFACE_FSHADER_PATH);
 
-    uploadSphereMesh();
     setUniforms();
 }
 
@@ -45,6 +44,10 @@ void Renderer::renderFrame() {
     renderScene.dt = renderScene.currTime - renderScene.lastTime;
     renderScene.lastTime = renderScene.currTime;
 
+    /*
+     Change radius of the sphere mesh uniform if 
+     the mesh is marked dirty.
+     */
     if (renderScene.getGlobalSphere().isMeshDrity()) {
         shader.setFloat(SPHERE, "fRadius", renderScene.getGlobalSphere().getRadius());
         renderScene.getGlobalSphere().setMeshDirtyStatus();
@@ -108,12 +111,6 @@ void Renderer::drawSpheres() {
     if (renderScene.hasNoSpheres()) { return; }
 
     shader.use(SPHERE);
-    static int count = 0;
-
-    if (renderScene.getGlobalSphere().isMeshDrity()) {
-        shader.setFloat(SPHERE, "fRadius", renderScene.getGlobalSphere().getRadius());
-        renderScene.getGlobalSphere().setMeshDirtyStatus();
-    }
 
     glBindVertexArray(uVAO);
 
@@ -209,19 +206,24 @@ void Renderer::uploadSphereMesh() {
     glBindBuffer(GL_ARRAY_BUFFER, renderScene.particleSSBO);
 
     // Location 1: xyz position, w mass (offset 0)
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(SphereInstanceData), (void*)offsetof(SphereInstanceData, position_mass));
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, position_mass));
     glEnableVertexAttribArray(1);
     glVertexAttribDivisor(1, 1); // One per instance
 
-    // Location 2: xyz color, w radius (offset 16)
-    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(SphereInstanceData), (void*)offsetof(SphereInstanceData, color_padding));
+    // Location 2: xyz velocity, w density (offset 16)
+    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, velocity_density));
     glEnableVertexAttribArray(2);
     glVertexAttribDivisor(2, 1);
 
-    // Location 3: xyz velocity, w padding (offset 32)
-    glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(SphereInstanceData), (void*)offsetof(SphereInstanceData, velocity_padding));
+    // Location 3: xyz force, w pressure (offset 32)
+    glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, force_pressure));
     glEnableVertexAttribArray(3);
     glVertexAttribDivisor(3, 1);
+
+    // Location 4: xyz color, w padding (offset 48)
+    glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, color_padding));
+    glEnableVertexAttribArray(4);
+    glVertexAttribDivisor(4, 1);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, uEBO);
     glBufferData(

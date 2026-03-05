@@ -9,6 +9,7 @@ Sphere3D::Sphere3D()
     bDirtyMesh(false),
     fRadius(EPSILON)   
 {
+
     // Two extra points per row for start and end
     uPointsPerRow = uSubdivisions + 2;
 

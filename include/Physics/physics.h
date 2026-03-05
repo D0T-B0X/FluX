@@ -2,6 +2,8 @@
 #define PHYSICS_H
 
 #include <glm/glm.hpp>
+
+#include "settings.h"
 #include "scene.h"
 #include "config.h"
 #include "Renderer/shader.h"
@@ -10,6 +12,7 @@ class Physics {
 public: 
     Physics(Scene& activeScene);
 
+    void         setSPHUniforms();
     void         updateFrame();
     void         cleanup();
     void         initSSBO();

@@ -7,7 +7,7 @@ void App::run() {
     setup();
     pEngine.initSSBO();
     rEngine.uploadSphereMesh();
-    
+
     while (!rEngine.shouldEnd()) {
         pEngine.updateFrame();
         rEngine.renderFrame();
@@ -21,14 +21,14 @@ void App::setup() {
     // Set the global sphere radius 
     activeScene.getGlobalSphere().setRadius(0.5f);
 
-    const int gridX = 60;
-    const int gridY = 60;
-    const int gridZ = 60;
-    const int maxParticles = 100000000;
+    const int gridX = 16;
+    const int gridY = 16;
+    const int gridZ = 16;
+    const int maxParticles = 4096;
 
     // Grid bounds
-    const float minBound = -50.0f;
-    const float maxBound =  50.0f;
+    const float minBound = -10.0f;
+    const float maxBound =  10.0f;
     const float range = maxBound - minBound;
 
     // Spacing between particles
@@ -41,14 +41,28 @@ void App::setup() {
     for (int x = 0; x < gridX && particleCount < maxParticles; ++x) {
         for (int y = 0; y < gridY && particleCount < maxParticles; ++y) {
             for (int z = 0; z < gridZ && particleCount < maxParticles; ++z) {
-                SphereInstanceData particle;
+                Particle particle;
 
                 // Calculate position
                 particle.position_mass = glm::vec4(
                     minBound + x * spacingX,
                     minBound + y * spacingY,
                     minBound + z * spacingZ,
-                    0.0f
+                    1.0f
+                );
+                
+                particle.velocity_density = glm::vec4(
+                    0.0f,
+                    0.0f,
+                    0.0f,
+                    0.0f     // Density is calculated in the compute shader
+                );
+
+                particle.force_pressure = glm::vec4(
+                    0.0f,
+                    0.0f,
+                    0.0f,
+                    0.0f     // Pressure is also calculated in the compute shader
                 );
 
                 // Color based on position (gradient effect)
@@ -56,14 +70,7 @@ void App::setup() {
                     (float)x / (float)gridX,
                     (float)y / (float)gridY,
                     (float)z / (float)gridZ,
-                    0.0f
-                );
-
-                particle.velocity_padding = glm::vec4(
-                    0.0f,
-                    0.0f,
-                    0.0f,
-                    0.0
+                    69.0f    // I'm immature :P
                 );
 
                 activeScene.addSphere(particle);
@@ -71,6 +78,8 @@ void App::setup() {
             }
         }
     }
+
+    std::cout << "Currently rendering " << particleCount << " particles" << std::endl;
 
     /*
     SurfaceInstanceData testSurface;

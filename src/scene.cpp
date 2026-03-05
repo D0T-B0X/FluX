@@ -12,7 +12,7 @@ Sphere3D& Scene::getGlobalSphere() {
     return globalSphere;
 }
 
-void Scene::addSphere(SphereInstanceData sphere) {
+void Scene::addSphere(Particle sphere) {
     Spheres.push_back(sphere);
 }
 
@@ -28,12 +28,12 @@ bool Scene::hasNoSpheres() {
     return Spheres.empty();
 }
 
-std::vector<SphereInstanceData>& Scene::getSpheres() {
+std::vector<Particle>& Scene::getSpheres() {
     return Spheres;
 }
 
 unsigned int Scene::getSpheresDataSize() {
-    return Spheres.size() * sizeof(SphereInstanceData);
+    return Spheres.size() * sizeof(Particle);
 }
 
 unsigned int Scene::getSpheresSize() {

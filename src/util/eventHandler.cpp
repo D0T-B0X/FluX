@@ -1,6 +1,6 @@
 #include "util/eventHandler.h"
 
-EventHandler::EventHandler(Scene& scene) : eventScene(scene) { }
+EventHandler::EventHandler(Scene& scene) : eventScene(scene) { std::cout << "Run event handler" << std::endl; }
 
 void EventHandler::handleEvents(uint currentFrame) {
     if (eventQueue.top().activationFrame < currentFrame) {
