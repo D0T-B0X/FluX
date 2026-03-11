@@ -6,11 +6,12 @@ FluX is a real-time 3D particle-based fluid simulator built from scratch with C+
 
 ## Features
 
-- **GPU-driven SPH simulation** — density, pressure, and force computations run in a GLSL 460 compute shader with 256-thread workgroups
+- **GPU-driven SPH simulation** — density, pressure, and force computations each run in a dedicated GLSL 460 compute shader (3 passes per frame) with 256-thread workgroups
 - **4,096 particles** initialized on a 16×16×16 grid with position-based color gradients
 - **Instanced rendering** — all particles share a single subdivided cube-sphere mesh drawn via `glDrawElementsInstanced`, with per-particle data streamed from an SSBO
 - **Phong lighting** — per-fragment diffuse + ambient shading on every particle
 - **Free-look camera** — WASD + mouse first-person controls with configurable FOV, sensitivity, and speed
+- **Floor boundary** — particles bounce off a configurable floor plane with velocity damping
 - **Event system** — priority-queue based handler for runtime parameter changes (radius, subdivisions, viscosity, gravity)
 - **Tait equation of state** for pressure, with Poly6, Spiky gradient, and viscosity Laplacian SPH kernels
 
@@ -38,7 +39,9 @@ FluX/
 │   ├── fSphere.glsl             # Sphere fragment shader (Phong)
 │   ├── vSurface.glsl            # Surface vertex shader
 │   ├── fSurface.glsl            # Surface fragment shader
-│   └── physics.comp             # SPH compute shader
+│   ├── density_pass.comp        # SPH density compute shader (Poly6 kernel)
+│   ├── pressure_pass.comp       # Pressure compute shader (Tait equation)
+│   └── force_pass.comp          # Force, integration & boundary compute shader
 ├── include/                     # Headers mirroring src/ layout
 ├── CMakeLists.txt
 └── config.h.in                  # CMake-configured shader paths
@@ -60,29 +63,39 @@ git clone https://github.com/D0T-B0X/FluX.git
 cd FluX
 mkdir -p build && cd build
 cmake ..
-make -j $(nproc)
+make -j$(nproc)
 ./FluX
 ```
 
+## Controls
+
+| Key | Action |
+|-----|--------|
+| `W` / `S` | Move forward / backward |
+| `A` / `D` | Strafe left / right |
+| `Space` / `Ctrl` | Move up / down |
+| `Mouse` | Look around |
+| `Esc` | Quit |
+
 ## How It Works
 
-1. **Initialization** — 4,096 particles are placed on a uniform 16³ grid. Each particle carries position, mass, velocity, density, force, pressure, and color packed into four `vec4`s (64 bytes per particle).
+1. **Initialization** — 4,096 particles are placed on a uniform 16³ grid. Each particle carries position, mass, velocity, density, force, pressure, and color packed into four `vec4`s (64 bytes per particle). The data is uploaded to an SSBO shared between the compute and render pipelines.
 
-2. **Compute pass** — Every frame, the SPH compute shader dispatches enough workgroups to cover all particles. For each particle it:
-   - Accumulates density from neighbors using the **Poly6** kernel
-   - Computes pressure via **Tait's equation**: $p = k\left(\left(\frac{\rho}{\rho_0}\right)^\gamma - 1\right)$
-   - Calculates pressure forces with the **Spiky gradient** kernel and viscosity forces with the **viscosity Laplacian** kernel
+2. **Compute passes** — Every frame, three compute shaders run in sequence with memory barriers between them:
+   - **Density pass** — accumulates density for each particle from all neighbors using the **Poly6** kernel
+   - **Pressure pass** — computes pressure via **Tait's equation**: $p = k\left(\left(\frac{\rho}{\rho_0}\right)^\gamma - 1\right)$
+   - **Force pass** — calculates pressure forces with the **Spiky gradient** kernel and viscosity forces with the **viscosity Laplacian** kernel, integrates velocity and position, and enforces floor boundary conditions
 
-3. **Render pass** — The particle SSBO is bound as instanced vertex attributes. A shared cube-sphere mesh is drawn once per particle via instanced rendering, with per-fragment Phong lighting.
+3. **Render pass** — The particle SSBO is bound as instanced vertex attributes. A shared cube-sphere mesh is drawn once per particle via `glDrawElementsInstanced`, with per-fragment Phong lighting (diffuse + ambient).
 
 ## Roadmap
 
-- [ ] Fix SPH integration step (velocity & position update in compute shader)
 - [ ] Spatial hashing / grid-based neighbor search for O(n) density lookups
 - [ ] Scale to 10k–100k+ particles
-- [ ] Boundary handling improvements
+- [ ] Wall boundaries on all sides
 - [ ] Surface mesh rendering (marching cubes or screen-space fluids)
+- [ ] Runtime parameter tuning via the event system
 
 ## License
 
-This is a personal learning project.
+[MIT](LICENSE)
