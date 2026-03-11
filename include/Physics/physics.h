@@ -12,14 +12,18 @@ class Physics {
 public: 
     Physics(Scene& activeScene);
 
-    void         setSPHUniforms();
+    void         setDensityUniforms();
+    void         setPressureUniforms();
+    void         setForceUniforms();
     void         updateFrame();
     void         cleanup();
     void         initSSBO();
 
 private:
     Scene&       physicsScene;
-    Shader       shader;
+    Shader       densityShader;
+    Shader       pressureShader;
+    Shader       forceShader;
 };
 
 #endif

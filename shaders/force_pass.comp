@@ -15,34 +15,14 @@ layout (std430, binding = 0) buffer ParticleBuffer {
 
 // ------- SPH constants -------
 uniform float h;
-uniform float h2;
-uniform float poly6;
 uniform float spikeGrad;
-uniform float viscLaplacian;
-
-// ------- Fluid constants -------
-uniform float k;
-uniform float restingRho;
-uniform int   gamma;
-
-// ------- Timing uniforms -------
-uniform float dt;
-uniform bool  reset;
 
 // ------- Dimensional constraints -------
-uniform float base;
 uniform int   numParticles;
 
 /* 
     Kernel Functions
 */
-float
-W_poly6(float r2) {
-    if (r2 >= h2) return 0.0;
-    float diff = h2 - r2;
-    return poly6 * diff*diff*diff;
-}
-
 vec3 
 gradW_spike(vec3 r, float r_len) {
     if (r_len > h || r_len < 1e-6) return vec3(0.0);
@@ -50,37 +30,11 @@ gradW_spike(vec3 r, float r_len) {
     return factor * r;
 }
 
-float 
-laplacianW_viscosity(float r) {
-    if (r > h) return 0.0;
-    return viscLaplacian * (h - r);
-}   
-
 void 
 main() {
     uint i = gl_GlobalInvocationID.x;
 
     if (i >= numParticles) return;
-    float mass = particles[i].position_mass.w;
-
-    particles[i].force_pressure.xyz = vec3(0.0);
-
-    // Density calculation
-    for (int j = 0; j < numParticles; ++j) {
-        vec3 r = particles[i].position_mass.xyz - particles[j].position_mass.xyz;
-        float r2 = dot(r, r);
-        if (r2 < h2) {
-            particles[j].velocity_density.w += particles[j].position_mass.w * W_poly6(r2);
-        }
-    }
-
-    // Pressure calculation
-    for (int j = 0; j < numParticles; ++j) {
-        float d = particles[j].velocity_density.w;
-        float p = k * (pow((d / restingRho), gamma) - 1);
-        particles[j].force_pressure.w = p;
-    }
-
     // Force calculation
     // TODO => Change force calculation to rpSPH
     for (int j = 0; j < numParticles; ++j) {
@@ -102,8 +56,8 @@ main() {
         vec3 force = m1 * m2 * ((p1 / (d1*d1)) + (p2 / (d2*d2))) * gradW_spike(r, r_len);
         force *= -1.0;
 
-        particles[i].force_pressure.xyz += force;
+        atomicAdd(particles[i].force_pressure.x, force.x);
+        atomicAdd(particles[i].force_pressure.y, force.y);
+        atomicAdd(particles[i].force_pressure.z, force.z);
     }
-
-    memoryBarrier();
 }

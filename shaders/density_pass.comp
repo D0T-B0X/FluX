@@ -1,0 +1,62 @@
+#version 460 core
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+struct Particle {
+    vec4 position_mass; 
+    vec4 velocity_density;
+    vec4 force_pressure;
+    vec4 color_padding;
+};
+
+layout (std430, binding = 0) buffer ParticleBuffer {
+    Particle particles[];
+};
+
+#define atomicAddFloat(MEM, VALUE) \
+{ \
+    uint expected = MEM; \
+    float new_val = uintBitsToFloat(expected) + VALUE; \
+    uint desired = floatBitsToUint(new_val); \
+    uint result = atomicCompSwap(MEM, expected, desired); \
+    while (result != expected) { \
+        expected = result; \
+        new_val = uintBitsToFloat(expected) + VALUE; \
+        desired = floatBitsToUint(new_val); \
+        result = atomicCompSwap(MEM, expected, desired); \
+    } \
+}
+
+// ------- SPH constants -------
+uniform float h2;
+uniform float poly6;
+
+// ------- Dimensional constraints -------
+uniform int   numParticles;
+
+/* 
+    Kernel Functions
+*/
+float
+W_poly6(float r2) {
+    if (r2 >= h2) return 0.0;
+    float diff = h2 - r2;
+    return poly6 * diff*diff*diff;
+}
+
+void 
+main() {
+    uint i = gl_GlobalInvocationID.x;
+
+    if (i >= numParticles) return;
+
+    // Density calculation
+    for (int j = 0; j < numParticles; ++j) {
+        vec3 r = particles[i].position_mass.xyz - particles[j].position_mass.xyz;
+        float r2 = dot(r, r);
+        if (r2 < h2) {
+            float contribution = particles[j].position_mass.w * W_poly6(r2);
+            atomicAddFloat(particles[j].velocity_density.w, contribution);
+        }
+    }
+}

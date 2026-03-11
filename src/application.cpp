@@ -5,8 +5,6 @@ App::App() : rEngine(activeScene), pEngine(activeScene) { }
 
 void App::run() {  
     setup();
-    pEngine.initSSBO();
-    rEngine.uploadSphereMesh();
 
     while (!rEngine.shouldEnd()) {
         pEngine.updateFrame();
@@ -78,6 +76,7 @@ void App::setup() {
             }
         }
     }
+    rEngine.uploadSphereMesh();
 
     std::cout << "Currently rendering " << particleCount << " particles" << std::endl;
 
@@ -90,5 +89,11 @@ void App::setup() {
 
     activeScene.addSurface(testSurface);
     */
+
+    // Physics setup
+    pEngine.initSSBO();
+    pEngine.setDensityUniforms();
+    pEngine.setPressureUniforms();
+    pEngine.setForceUniforms();
 }
 
