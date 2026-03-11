@@ -21,12 +21,12 @@ inline const unsigned int  SCR_HEIGHT           =       1200;
 // -------- Camera Settings -----------------
 inline constexpr float     FOV                  =       90.0f;
 inline constexpr float     MOUSE_SENSITIVITY    =       0.5f;   
-inline constexpr float     MOVEMENT_SPEED       =       10.0f;
+inline constexpr float     MOVEMENT_SPEED       =       0.5f;
 
-// -------- SPH constants -------------------
-inline constexpr float     SMOOTHING_RADIUS     =       10.0f;
-inline constexpr float     K                    =       3.5f;     // Stiffness coefficient
-inline constexpr float     RESTING_DENSITY      =       1.0f;
+// -------- SPH constants (SI: kg, m, s) ----
+inline constexpr float     SMOOTHING_RADIUS     =       0.034f;       // m   (~2.5× particle spacing)
+inline constexpr float     K                    =       500000.0f;    // Pa  (B = ρ₀c²/γ, c ≈ 60 m/s)
+inline constexpr float     RESTING_DENSITY      =       1000.0f;      // kg/m³ (water)
 inline constexpr int       GAMMA                =       7;  
 
 #endif

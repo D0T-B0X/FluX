@@ -17,7 +17,7 @@ void App::run() {
 
 void App::setup() {
     // Set the global sphere radius 
-    activeScene.getGlobalSphere().setRadius(0.5f);
+    activeScene.getGlobalSphere().setRadius(0.005f);
 
     const int gridX = 16;
     const int gridY = 16;
@@ -25,15 +25,18 @@ void App::setup() {
     const int maxParticles = 4096;
 
     // Grid bounds
-    const float minBound = -10.0f;
-    const float maxBound =  10.0f;
-    const float range = maxBound - minBound;
+    const float minBound = -0.1f;
+    const float maxBound =  0.1f;
+    const float range = (maxBound - minBound);
 
     // Spacing between particles
     const float spacingX = range / (float)(gridX - 1);
     const float spacingY = range / (float)(gridY - 1);
     const float spacingZ = range / (float)(gridZ - 1);
 
+    float totalParticleCount = gridX * gridY * gridZ;
+    float totalVolume = range * range * range;
+    float massPerParticle = (RESTING_DENSITY * totalVolume) / totalParticleCount;
     int particleCount = 0;
 
     for (int x = 0; x < gridX && particleCount < maxParticles; ++x) {
@@ -46,7 +49,7 @@ void App::setup() {
                     minBound + x * spacingX,
                     minBound + y * spacingY,
                     minBound + z * spacingZ,
-                    1.0f
+                    massPerParticle
                 );
                 
                 particle.velocity_density = glm::vec4(
@@ -76,6 +79,9 @@ void App::setup() {
             }
         }
     }
+    // Physics setup — SSBO must exist before uploadSphereMesh binds it
+    pEngine.initSSBO();
+
     rEngine.uploadSphereMesh();
 
     std::cout << "Currently rendering " << particleCount << " particles" << std::endl;
@@ -90,8 +96,6 @@ void App::setup() {
     activeScene.addSurface(testSurface);
     */
 
-    // Physics setup
-    pEngine.initSSBO();
     pEngine.setDensityUniforms();
     pEngine.setPressureUniforms();
     pEngine.setForceUniforms();

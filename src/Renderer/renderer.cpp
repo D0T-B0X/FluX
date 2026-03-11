@@ -2,7 +2,7 @@
 
 Renderer::Renderer(Scene& activeScene) 
     :
-    camera(glm::vec3(0.0f, 0.0f, 20.0f)),
+    camera(glm::vec3(0.0f, 0.0f, 0.5f)),
     window(nullptr), 
     renderScene(activeScene),
     uploadRadiusUniform(false),
@@ -39,11 +39,6 @@ Renderer::Renderer(Scene& activeScene)
 }
 
 void Renderer::renderFrame() {
-    // Scene timing update
-    renderScene.currTime = glfwGetTime();
-    renderScene.dt = renderScene.currTime - renderScene.lastTime;
-    renderScene.lastTime = renderScene.currTime;
-
     /*
      Change radius of the sphere mesh uniform if 
      the mesh is marked dirty.

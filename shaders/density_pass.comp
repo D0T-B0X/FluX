@@ -13,20 +13,6 @@ layout (std430, binding = 0) buffer ParticleBuffer {
     Particle particles[];
 };
 
-#define atomicAddFloat(MEM, VALUE) \
-{ \
-    uint expected = MEM; \
-    float new_val = uintBitsToFloat(expected) + VALUE; \
-    uint desired = floatBitsToUint(new_val); \
-    uint result = atomicCompSwap(MEM, expected, desired); \
-    while (result != expected) { \
-        expected = result; \
-        new_val = uintBitsToFloat(expected) + VALUE; \
-        desired = floatBitsToUint(new_val); \
-        result = atomicCompSwap(MEM, expected, desired); \
-    } \
-}
-
 // ------- SPH constants -------
 uniform float h2;
 uniform float poly6;
@@ -51,12 +37,14 @@ main() {
     if (i >= numParticles) return;
 
     // Density calculation
+    float my_density = 0.0;
     for (int j = 0; j < numParticles; ++j) {
         vec3 r = particles[i].position_mass.xyz - particles[j].position_mass.xyz;
         float r2 = dot(r, r);
         if (r2 < h2) {
-            float contribution = particles[j].position_mass.w * W_poly6(r2);
-            atomicAddFloat(particles[j].velocity_density.w, contribution);
+            my_density += particles[j].position_mass.w * W_poly6(r2);
         }
     }
+
+    particles[i].velocity_density.w = my_density;
 }

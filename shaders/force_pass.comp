@@ -13,12 +13,21 @@ layout (std430, binding = 0) buffer ParticleBuffer {
     Particle particles[];
 };
 
+uniform vec3 GRAVITY_C;
+
 // ------- SPH constants -------
 uniform float h;
 uniform float spikeGrad;
+uniform float viscLaplacian;
+uniform float mu;
 
 // ------- Dimensional constraints -------
 uniform int   numParticles;
+uniform float floorY;
+uniform float damping;
+
+// ------- Timing variables -------
+uniform float dt;
 
 /* 
     Kernel Functions
@@ -30,13 +39,21 @@ gradW_spike(vec3 r, float r_len) {
     return factor * r;
 }
 
+float 
+laplacianW_viscosity(float r) {
+    if (r > h) return 0.0;
+    return viscLaplacian * (h - r);
+}   
+
 void 
 main() {
     uint i = gl_GlobalInvocationID.x;
-
     if (i >= numParticles) return;
+
     // Force calculation
     // TODO => Change force calculation to rpSPH
+    vec3 p_force = vec3(0.0);
+    vec3 v_force = vec3(0.0);
     for (int j = 0; j < numParticles; ++j) {
         if (i == j) continue;
 
@@ -52,12 +69,31 @@ main() {
         float p1 = particles[i].force_pressure.w;
         float p2 = particles[j].force_pressure.w;
 
+        vec3 v1 = particles[i].velocity_density.xyz;
+        vec3 v2 = particles[j].velocity_density.xyz;
+
         // Force from pressure
         vec3 force = m1 * m2 * ((p1 / (d1*d1)) + (p2 / (d2*d2))) * gradW_spike(r, r_len);
         force *= -1.0;
 
-        atomicAdd(particles[i].force_pressure.x, force.x);
-        atomicAdd(particles[i].force_pressure.y, force.y);
-        atomicAdd(particles[i].force_pressure.z, force.z);
+        p_force += force;
+
+        // Force from viscosity
+        force = m2 * ((2 * (v2 - v1)) / (d1 + d2)) * laplacianW_viscosity(r_len);
+        v_force += force;
     }
+
+    v_force *= mu * particles[i].position_mass.w;
+    vec3 g_force = particles[i].position_mass.w * GRAVITY_C;
+    particles[i].force_pressure.xyz = p_force + v_force + g_force;
+
+    // change position based on force
+    vec3 acceleration = particles[i].force_pressure.xyz / particles[i].position_mass.w;
+    particles[i].velocity_density.xyz += dt * acceleration;
+    particles[i].position_mass.xyz += dt * particles[i].velocity_density.xyz;
+
+    // Floor enforcement
+    float belowFloor = step(particles[i].position_mass.y, floorY);
+    particles[i].position_mass.y = max(particles[i].position_mass.y, floorY);
+    particles[i].velocity_density.y = mix(particles[i].velocity_density.y, -particles[i].velocity_density.y * damping, belowFloor);
 }
