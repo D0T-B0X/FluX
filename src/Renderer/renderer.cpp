@@ -2,7 +2,7 @@
 
 Renderer::Renderer(Scene& activeScene) 
     :
-    camera(glm::vec3(0.0f, 0.0f, 0.5f)),
+    camera(CAMERA_POSITION),
     window(nullptr), 
     renderScene(activeScene),
     uploadRadiusUniform(false),
@@ -10,7 +10,8 @@ Renderer::Renderer(Scene& activeScene)
     uVAO(0),
     uVBO(0),
     uInstancedVBO(0),
-    uEBO(0)
+    uEBO(0),
+    timeAccumulator(0)
 {
 
     // Initialize OpenGL with version 4.6
@@ -38,7 +39,8 @@ Renderer::Renderer(Scene& activeScene)
     setUniforms();
 }
 
-void Renderer::renderFrame() {
+void 
+Renderer::renderFrame() {
     /*
      Change radius of the sphere mesh uniform if 
      the mesh is marked dirty.
@@ -64,7 +66,8 @@ void Renderer::renderFrame() {
     glfwPollEvents();
 }
 
-void Renderer::setSphereSubdivisions(uint subdivs) {
+void 
+Renderer::setSphereSubdivisions(uint subdivs) {
     renderScene.getGlobalSphere().setSubdivision(subdivs);
 
     glBindVertexArray(uVAO);
@@ -89,7 +92,8 @@ void Renderer::setSphereSubdivisions(uint subdivs) {
     glBindVertexArray(0);
 }
 
-void Renderer::setUniforms() {
+void 
+Renderer::setUniforms() {
     // Set Sphere Uniforms
     shader.use(SPHERE);
 
@@ -102,7 +106,8 @@ void Renderer::setUniforms() {
     shader.use(SURFACE); // TODO => Make separate function for surfaces
 }
 
-void Renderer::drawSpheres() {
+void 
+Renderer::drawSpheres() {
     if (renderScene.hasNoSpheres()) { return; }
 
     shader.use(SPHERE);
@@ -114,25 +119,29 @@ void Renderer::drawSpheres() {
         this->sphereIndexCount, 
         GL_UNSIGNED_INT, 
         NULL, 
-        renderScene.getSpheresSize()
+        renderScene.getParticleCount()
     );
 
     glBindVertexArray(0);
 }
 
-void Renderer::drawSurfaces() {
+void 
+Renderer::drawSurfaces() {
     shader.use(SURFACE);
 }
 
-bool Renderer::shouldEnd() {
+bool 
+Renderer::shouldEnd() {
     return glfwWindowShouldClose(window);
 }
 
-void Renderer::cleanup() {
+void 
+Renderer::cleanup() {
     glfwTerminate();
 }
 
-void Renderer::createWindow() {
+void 
+Renderer::createWindow() {
     window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, NAME, NULL, NULL);
     if (!window) {
         printf("Failed to create a window\n");
@@ -141,15 +150,17 @@ void Renderer::createWindow() {
     glfwMakeContextCurrent(window);
 }
 
-void Renderer::loadGLAD() {
+void 
+Renderer::loadGLAD() {
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
         std::cout << "Failed to load glad" << std::endl;
         exit(-1); 
     }
 }
 
-void Renderer::processKeyboardInput() {
-    float dt = renderScene.dt;
+void 
+Renderer::processKeyboardInput() {
+    float dt = RENDER_DT;
 
     if (glfwGetKey(this->window, GLFW_KEY_W) == GLFW_PRESS) {
         camera.processKeyboardInput(Direction::FORWARD, dt);
@@ -174,7 +185,8 @@ void Renderer::processKeyboardInput() {
     }
 }
 
-void Renderer::uploadSphereMesh() {
+void 
+Renderer::uploadSphereMesh() {
 
     if (!this->uVAO) {
         glGenVertexArrays(1, &uVAO);
@@ -197,29 +209,6 @@ void Renderer::uploadSphereMesh() {
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void *)0);
     glEnableVertexAttribArray(0);
 
-    // Instanced data attributes
-    glBindBuffer(GL_ARRAY_BUFFER, renderScene.particleSSBO);
-
-    // Location 1: xyz position, w mass (offset 0)
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, position_mass));
-    glEnableVertexAttribArray(1);
-    glVertexAttribDivisor(1, 1); // One per instance
-
-    // Location 2: xyz velocity, w density (offset 16)
-    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, velocity_density));
-    glEnableVertexAttribArray(2);
-    glVertexAttribDivisor(2, 1);
-
-    // Location 3: xyz force, w pressure (offset 32)
-    glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, force_pressure));
-    glEnableVertexAttribArray(3);
-    glVertexAttribDivisor(3, 1);
-
-    // Location 4: xyz color, w padding (offset 48)
-    glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, color_padding));
-    glEnableVertexAttribArray(4);
-    glVertexAttribDivisor(4, 1);
-
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, uEBO);
     glBufferData(
         GL_ELEMENT_ARRAY_BUFFER,
@@ -233,7 +222,8 @@ void Renderer::uploadSphereMesh() {
     glBindVertexArray(0);
 }
 
-void Renderer::cursorPositionCallback(GLFWwindow* window, double xpos, double ypos) {
+void 
+Renderer::cursorPositionCallback(GLFWwindow* window, double xpos, double ypos) {
     Renderer* self = static_cast<Renderer*>(glfwGetWindowUserPointer(window));
     if (!self) return;
     self->camera.mousePosition.x = xpos;

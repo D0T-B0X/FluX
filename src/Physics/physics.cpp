@@ -2,18 +2,20 @@
 
 Physics::Physics(Scene& activeScene) 
     : 
-    physicsScene(activeScene) 
+    physicsScene(activeScene),
+    timeAccumulator(0)
 { 
+    SMOOTHING_RADIUS = 0.0f;
     densityShader.load(DENSITY_CSHADER_PATH);
     pressureShader.load(PRESSURE_CSHADER_PATH);
     forceShader.load(FORCE_CSHADER_PATH);
 }
 
-void Physics::setDensityUniforms() {
+void 
+Physics::setDensityUniforms() {
     densityShader.use();
 
-    // TODO => Remove hard coded particle count
-    densityShader.setInt("numParticles", 4096);
+    densityShader.setInt("numParticles", physicsScene.particleCount);
     /* 
      Pass smoothing radius square to 
      the compute densityShader to prevent repetition
@@ -25,11 +27,12 @@ void Physics::setDensityUniforms() {
     densityShader.setFloat("poly6", polySix);
 }
 
-void Physics::setPressureUniforms() {
+void 
+Physics::setPressureUniforms() {
     pressureShader.use();
 
     // TODO => Remove hard coded particle count
-    pressureShader.setInt("numParticles", 4096);
+    pressureShader.setInt("numParticles", physicsScene.particleCount);
 
     // Stiffness coefficient
     pressureShader.setFloat("k", K);
@@ -41,16 +44,15 @@ void Physics::setPressureUniforms() {
     pressureShader.setFloat("gamma", GAMMA);
 }
 
-void Physics::setForceUniforms() {
+void 
+Physics::setForceUniforms() {
     forceShader.use();
 
-    // TODO => Remove hard coded particle count
-    forceShader.setInt("numParticles", 4096);
+    forceShader.setInt("numParticles", physicsScene.particleCount);
 
-    forceShader.setFloat("dt", physicsScene.dt);
     forceShader.setFloat("h", SMOOTHING_RADIUS);
     // TODO => Remove hardcoded grav acc and viscosity
-    forceShader.setVec3("GRAVITY_C", glm::vec3(0.0f, -9.81f, 0.0f));  // m/s²
+    forceShader.setVec3("GRAVITY_C", glm::vec3(0.0f, -9.81f, 0.0f));   // m/s²
     forceShader.setFloat("mu", 0.001f);                                // Pa·s (water)
 
     // Spike kernel fn
@@ -66,22 +68,35 @@ void Physics::setForceUniforms() {
     forceShader.setFloat("damping", 0.3f);
 }
 
-void Physics::updateFrame() {
-    // Scene timing update
-    physicsScene.currTime = glfwGetTime();
-    if (physicsScene.lastTime == 0.0f) physicsScene.lastTime = physicsScene.currTime;
-    physicsScene.dt = physicsScene.currTime - physicsScene.lastTime;
-    if (physicsScene.dt > 0.016f) physicsScene.dt = 0.016f;  // clamp to ~60fps max step
-    physicsScene.lastTime = physicsScene.currTime;
+void 
+Physics::updateFrame() {
 
     glBindBufferBase(
-        GL_SHADER_STORAGE_BUFFER, 
-        0, 
-        physicsScene.particleSSBO
+        GL_SHADER_STORAGE_BUFFER,
+        0,
+        physicsScene.position_massSSBO
+    );
+
+    glBindBufferBase(
+        GL_SHADER_STORAGE_BUFFER,
+        1,
+        physicsScene.velocity_densitySSBO
+    );
+
+    glBindBufferBase(
+        GL_SHADER_STORAGE_BUFFER,
+        2,
+        physicsScene.force_pressureSSBO
+    );
+
+    glBindBufferBase(
+        GL_SHADER_STORAGE_BUFFER,
+        3,
+        physicsScene.color_paddingSSBO
     );
 
     int threadsPerGroup = 256;
-    int numGroups = (physicsScene.getSpheresSize() + threadsPerGroup - 1) / threadsPerGroup;
+    int numGroups = (physicsScene.particleCount + threadsPerGroup - 1) / threadsPerGroup;
 
     // Density calculations pass
     densityShader.use();
@@ -95,35 +110,110 @@ void Physics::updateFrame() {
 
     // Pressure force calculations pass
     forceShader.use();
-    forceShader.setFloat("dt", physicsScene.dt);
+    forceShader.setFloat("dt", PHYSICS_DT);
     glDispatchCompute(numGroups, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 }
 
-void Physics::cleanup() {
+void 
+Physics::cleanup() {
     
 }
 
-void Physics::initSSBO() {
-    glGenBuffers(1, &physicsScene.particleSSBO);
+void 
+Physics::initSSBO() {
+    // Initialize all SSBOs
+    glGenBuffers(1, &physicsScene.position_massSSBO);
+    glGenBuffers(1, &physicsScene.velocity_densitySSBO);
+    glGenBuffers(1, &physicsScene.force_pressureSSBO);
+    glGenBuffers(1, &physicsScene.color_paddingSSBO);
 
+    // -------- Position Mass buffer --------
     glBindBuffer(
         GL_SHADER_STORAGE_BUFFER, 
-        physicsScene.particleSSBO
+        physicsScene.position_massSSBO
     );
     
     glBufferData(
         GL_SHADER_STORAGE_BUFFER, 
-        physicsScene.getSpheresDataSize(),
-        physicsScene.getSpheresData(),
+        physicsScene.getPropertyDataSize(),
+        physicsScene.getPositionMassData(),
         GL_DYNAMIC_DRAW
     );
 
     glBindBufferBase(
         GL_SHADER_STORAGE_BUFFER, 
         0, 
-        physicsScene.particleSSBO
+        physicsScene.position_massSSBO
+    );
+
+    // -------- Velocity Density buffer --------
+    glBindBuffer(
+        GL_SHADER_STORAGE_BUFFER, 
+        physicsScene.velocity_densitySSBO
+    );
+    
+    glBufferData(
+        GL_SHADER_STORAGE_BUFFER, 
+        physicsScene.getPropertyDataSize(),
+        physicsScene.getVelocityDensityData(),
+        GL_DYNAMIC_DRAW
+    );
+
+    glBindBufferBase(
+        GL_SHADER_STORAGE_BUFFER, 
+        1, 
+        physicsScene.velocity_densitySSBO
+    );
+
+    // -------- Force Pressure buffer --------
+    glBindBuffer(
+        GL_SHADER_STORAGE_BUFFER, 
+        physicsScene.force_pressureSSBO
+    );
+    
+    glBufferData(
+        GL_SHADER_STORAGE_BUFFER, 
+        physicsScene.getPropertyDataSize(),
+        physicsScene.getForcePressureData(),
+        GL_DYNAMIC_DRAW
+    );
+
+    glBindBufferBase(
+        GL_SHADER_STORAGE_BUFFER, 
+        2, 
+        physicsScene.force_pressureSSBO
+    );
+
+    // -------- Color Paddig buffer --------
+    glBindBuffer(
+        GL_SHADER_STORAGE_BUFFER, 
+        physicsScene.color_paddingSSBO
+    );
+    
+    glBufferData(
+        GL_SHADER_STORAGE_BUFFER, 
+        physicsScene.getPropertyDataSize(),
+        physicsScene.getColorPaddingData(),
+        GL_DYNAMIC_DRAW
+    );
+
+    glBindBufferBase(
+        GL_SHADER_STORAGE_BUFFER, 
+        3, 
+        physicsScene.color_paddingSSBO
     );
 
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+}
+
+void 
+Physics::setSmoothingRadius(float s) {
+    if (s < 0.0f) { SMOOTHING_RADIUS = 0.0f; return; }
+    SMOOTHING_RADIUS = s;
+}
+
+float 
+Physics::getSmoothingRadius() {
+    return SMOOTHING_RADIUS;
 }

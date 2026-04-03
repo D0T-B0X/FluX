@@ -22,6 +22,8 @@ public:
     bool          shouldEnd();
     void          cleanup();
 
+    float         timeAccumulator;
+
 private:
     // ------------ Helper libaries --------------
     GLFWwindow   *window;

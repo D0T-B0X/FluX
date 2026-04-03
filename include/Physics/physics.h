@@ -18,12 +18,18 @@ public:
     void         updateFrame();
     void         cleanup();
     void         initSSBO();
+    void         setSmoothingRadius(float s);
+    float        getSmoothingRadius();
+
+    float        timeAccumulator;
 
 private:
     Scene&       physicsScene;
     Shader       densityShader;
     Shader       pressureShader;
     Shader       forceShader;
+
+    float        SMOOTHING_RADIUS;
 };
 
 #endif

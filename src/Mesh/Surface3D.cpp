@@ -3,7 +3,8 @@
 
 Surface3D::Surface3D() { }
 
-SurfaceInstanceData Surface3D::generateSurface(sNormal normal, uint density, float distance) {
+SurfaceInstanceData 
+Surface3D::generateSurface(sNormal normal, uint density, float distance) {
     uint numLines = density + 1;
 
     SurfaceInstanceData surface;
@@ -60,7 +61,8 @@ SurfaceInstanceData Surface3D::generateSurface(sNormal normal, uint density, flo
     return surface;
 }
 
-std::vector<uint> Surface3D::calculateIndices() {
+std::vector<uint> 
+Surface3D::calculateIndices() {
     std::vector<uint> indices;
 
     return indices;

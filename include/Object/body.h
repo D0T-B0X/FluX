@@ -4,11 +4,11 @@
 #include "Mesh/Sphere3D.h"
 #include "Mesh/Surface3D.h"
 
-struct Particle {
-    glm::vec4 position_mass;
-    glm::vec4 velocity_density;
-    glm::vec4 force_pressure;
-    glm::vec4 color_padding;
+struct Particles {
+    std::vector<glm::vec4> position_mass;
+    std::vector<glm::vec4> velocity_density;
+    std::vector<glm::vec4> force_pressure;
+    std::vector<glm::vec4> color_padding;
 };
 
 #endif

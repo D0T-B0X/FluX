@@ -2,7 +2,8 @@
 
 EventHandler::EventHandler(Scene& scene) : eventScene(scene) { std::cout << "Run event handler" << std::endl; }
 
-void EventHandler::handleEvents(uint currentFrame) {
+void 
+EventHandler::handleEvents(uint currentFrame) {
     if (eventQueue.top().activationFrame < currentFrame) {
         eventQueue.pop();
         return;
@@ -19,13 +20,16 @@ void EventHandler::handleEvents(uint currentFrame) {
     }
 }
 
-void EventHandler::addEvent(const Event& e) {
+void 
+EventHandler::addEvent(const Event& e) {
     eventQueue.push(e);
 }
 
-void EventHandler::removeEvent(const uint uid) {
+void 
+EventHandler::removeEvent(const uint uid) {
     cancelledEvents.push(uid);
 }
 
-void EventHandler::changeSphereRadius(float radius) {
+void 
+EventHandler::changeSphereRadius(float radius) {
 }

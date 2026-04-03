@@ -3,88 +3,105 @@
 
 App::App() : rEngine(activeScene), pEngine(activeScene) { }
 
-void App::run() {  
+void
+App::run() {  
     setup();
 
     while (!rEngine.shouldEnd()) {
-        pEngine.updateFrame();
-        rEngine.renderFrame();
+        // Scene timing update
+        activeScene.currTime = glfwGetTime();
+        if (activeScene.lastTime == 0.0f) activeScene.lastTime = activeScene.currTime;
+        activeScene.dt = activeScene.currTime - activeScene.lastTime;
+        activeScene.lastTime = activeScene.currTime;
+        
+        pEngine.timeAccumulator += activeScene.dt;
+        rEngine.timeAccumulator += activeScene.dt;
+
+        // advance physics engine if time step is 2ms
+        while (pEngine.timeAccumulator >= PHYSICS_DT) {
+            std::cout << "Physics time: " << pEngine.timeAccumulator << std::endl;
+            pEngine.updateFrame();
+            pEngine.timeAccumulator -= PHYSICS_DT;
+        }
+
+        // advance render engine if time step is 16ms
+        while (rEngine.timeAccumulator >= RENDER_DT) {
+            std::cout << "Render time: " << rEngine.timeAccumulator << std::endl;
+            rEngine.renderFrame();
+            rEngine.timeAccumulator -= RENDER_DT;
+        }
     }
 
     rEngine.cleanup();
     pEngine.cleanup();
 }
 
-void App::setup() {
+void 
+App::setup() {
     // Set the global sphere radius 
-    activeScene.getGlobalSphere().setRadius(0.005f);
+    activeScene.getGlobalSphere().setRadius(0.05f);
 
-    const int gridX = 16;
-    const int gridY = 16;
-    const int gridZ = 16;
-    const int maxParticles = 4096;
+    const int gridD = 16;
+    const int maxParticles = gridD*gridD*gridD;
 
     // Grid bounds
-    const float minBound = -0.1f;
-    const float maxBound =  0.1f;
+    const float minBound = -1.0f;
+    const float maxBound =  1.0f;
     const float range = (maxBound - minBound);
 
     // Spacing between particles
-    const float spacingX = range / (float)(gridX - 1);
-    const float spacingY = range / (float)(gridY - 1);
-    const float spacingZ = range / (float)(gridZ - 1);
+    const float spacing = range / (float)(gridD - 1);
+    pEngine.setSmoothingRadius(spacing * 2.5f); // smoothing radius should be 2.5x the spacing
 
-    float totalParticleCount = gridX * gridY * gridZ;
+    float totalParticleCount = maxParticles;
     float totalVolume = range * range * range;
     float massPerParticle = (RESTING_DENSITY * totalVolume) / totalParticleCount;
-    int particleCount = 0;
 
-    for (int x = 0; x < gridX && particleCount < maxParticles; ++x) {
-        for (int y = 0; y < gridY && particleCount < maxParticles; ++y) {
-            for (int z = 0; z < gridZ && particleCount < maxParticles; ++z) {
-                Particle particle;
+    for (int x = 0; x < gridD && activeScene.particleCount < maxParticles; ++x) {
+        for (int y = 0; y < gridD && activeScene.particleCount < maxParticles; ++y) {
+            for (int z = 0; z < gridD && activeScene.particleCount < maxParticles; ++z) {
 
                 // Calculate position
-                particle.position_mass = glm::vec4(
-                    minBound + x * spacingX,
-                    minBound + y * spacingY,
-                    minBound + z * spacingZ,
+                activeScene.particles.position_mass.push_back(glm::vec4(
+                    minBound + x * spacing,
+                    minBound + y * spacing,
+                    minBound + z * spacing,
                     massPerParticle
-                );
+                ));
                 
-                particle.velocity_density = glm::vec4(
+                activeScene.particles.velocity_density.push_back(glm::vec4(
                     0.0f,
                     0.0f,
                     0.0f,
                     0.0f     // Density is calculated in the compute shader
-                );
+                ));
 
-                particle.force_pressure = glm::vec4(
+                activeScene.particles.force_pressure.push_back(glm::vec4(
                     0.0f,
                     0.0f,
                     0.0f,
                     0.0f     // Pressure is also calculated in the compute shader
-                );
+                ));
 
                 // Color based on position (gradient effect)
-                particle.color_padding = glm::vec4(
-                    (float)x / (float)gridX,
-                    (float)y / (float)gridY,
-                    (float)z / (float)gridZ,
+                activeScene.particles.color_padding.push_back(glm::vec4(
+                    (float)x / (float)gridD,
+                    (float)y / (float)gridD,
+                    (float)z / (float)gridD,
                     69.0f    // I'm immature :P
-                );
+                ));
 
-                activeScene.addSphere(particle);
-                ++particleCount;
+                ++activeScene.particleCount;
             }
         }
     }
-    // Physics setup — SSBO must exist before uploadSphereMesh binds it
+    
+    // SSBO setup
     pEngine.initSSBO();
 
     rEngine.uploadSphereMesh();
 
-    std::cout << "Currently rendering " << particleCount << " particles" << std::endl;
+    std::cout << "Currently rendering " << activeScene.particleCount << " particles" << std::endl;
 
     /*
     SurfaceInstanceData testSurface;
@@ -96,6 +113,7 @@ void App::setup() {
     activeScene.addSurface(testSurface);
     */
 
+    // Physics setup
     pEngine.setDensityUniforms();
     pEngine.setPressureUniforms();
     pEngine.setForceUniforms();

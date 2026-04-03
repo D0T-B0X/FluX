@@ -5,15 +5,15 @@ Scene::Scene()
     dt(0.0f),
     currTime(0.0f),
     lastTime(0.0f),
-    particleSSBO(0)
+    position_massSSBO(0),
+    velocity_densitySSBO(0),
+    force_pressureSSBO(0),
+    color_paddingSSBO(0),
+    particleCount(0)
     { }
 
 Sphere3D& Scene::getGlobalSphere() {
     return globalSphere;
-}
-
-void Scene::addSphere(Particle sphere) {
-    Spheres.push_back(sphere);
 }
 
 void Scene::addSurface(SurfaceInstanceData surface) {
@@ -25,22 +25,32 @@ SurfaceInstanceData Scene::createSurface(sNormal normal, uint density, float dis
 }
 
 bool Scene::hasNoSpheres() {
-    return Spheres.empty();
+    return particleCount == 0;
 }
 
-std::vector<Particle>& Scene::getSpheres() {
-    return Spheres;
+Particles& Scene::getSpheres() {
+    return particles;
 }
 
-unsigned int Scene::getSpheresDataSize() {
-    return Spheres.size() * sizeof(Particle);
+unsigned int Scene::getParticleCount() {
+    return particleCount;
+}
+unsigned int Scene::getPropertyDataSize() {
+    return particleCount * sizeof(glm::vec4);
 }
 
-unsigned int Scene::getSpheresSize() {
-    return Spheres.size();
+const void* Scene::getPositionMassData() {
+    return particles.position_mass.data();
 }
 
-const void* Scene::getSpheresData() {
-    return Spheres.data();
+const void* Scene::getVelocityDensityData() {
+    return particles.velocity_density.data();
 }
 
+const void* Scene::getForcePressureData() {
+    return particles.force_pressure.data();
+}
+
+const void* Scene::getColorPaddingData() {
+    return particles.color_padding.data();
+}

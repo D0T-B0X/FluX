@@ -2,16 +2,10 @@
 
 layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
-struct Particle {
-    vec4 position_mass; 
-    vec4 velocity_density;
-    vec4 force_pressure;
-    vec4 color_padding;
-};
-
-layout (std430, binding = 0) buffer ParticleBuffer {
-    Particle particles[];
-};
+layout(std430, binding = 0) buffer PosBuffer { vec4 position_mass[]; };
+layout(std430, binding = 1) buffer VelBuffer { vec4 velocity_density[]; };
+layout(std430, binding = 2) buffer ForceBuffer { vec4 force_pressure[]; };
+layout(std430, binding = 3) buffer ColorBuffer { vec4 color_padding[]; };
 
 uniform vec3 GRAVITY_C;
 
@@ -57,20 +51,20 @@ main() {
     for (int j = 0; j < numParticles; ++j) {
         if (i == j) continue;
 
-        float d1 = particles[i].velocity_density.w;
-        float d2 = particles[j].velocity_density.w;
+        float d1 = velocity_density[i].w;
+        float d2 = velocity_density[j].w;
 
-        vec3 r = particles[i].position_mass.xyz - particles[j].position_mass.xyz;
+        vec3 r = position_mass[i].xyz - position_mass[j].xyz;
         float r_len = length(r);
 
-        float m1 = particles[i].position_mass.w;
-        float m2 = particles[j].position_mass.w;
+        float m1 = position_mass[i].w;
+        float m2 = position_mass[j].w;
 
-        float p1 = particles[i].force_pressure.w;
-        float p2 = particles[j].force_pressure.w;
+        float p1 = force_pressure[i].w;
+        float p2 = force_pressure[j].w;
 
-        vec3 v1 = particles[i].velocity_density.xyz;
-        vec3 v2 = particles[j].velocity_density.xyz;
+        vec3 v1 = velocity_density[i].xyz;
+        vec3 v2 = velocity_density[j].xyz;
 
         // Force from pressure
         vec3 force = m1 * m2 * ((p1 / (d1*d1)) + (p2 / (d2*d2))) * gradW_spike(r, r_len);
@@ -83,17 +77,17 @@ main() {
         v_force += force;
     }
 
-    v_force *= mu * particles[i].position_mass.w;
-    vec3 g_force = particles[i].position_mass.w * GRAVITY_C;
-    particles[i].force_pressure.xyz = p_force + v_force + g_force;
+    v_force *= mu * position_mass[i].w;
+    vec3 g_force = position_mass[i].w * GRAVITY_C;
+    force_pressure[i].xyz = p_force + v_force + g_force;
 
     // change position based on force
-    vec3 acceleration = particles[i].force_pressure.xyz / particles[i].position_mass.w;
-    particles[i].velocity_density.xyz += dt * acceleration;
-    particles[i].position_mass.xyz += dt * particles[i].velocity_density.xyz;
+    vec3 acceleration = force_pressure[i].xyz / position_mass[i].w;
+    velocity_density[i].xyz += dt * acceleration;
+    position_mass[i].xyz += dt * velocity_density[i].xyz;
 
     // Floor enforcement
-    float belowFloor = step(particles[i].position_mass.y, floorY);
-    particles[i].position_mass.y = max(particles[i].position_mass.y, floorY);
-    particles[i].velocity_density.y = mix(particles[i].velocity_density.y, -particles[i].velocity_density.y * damping, belowFloor);
+    float belowFloor = step(position_mass[i].y, floorY);
+    position_mass[i].y = max(position_mass[i].y, floorY);
+    velocity_density[i].y = mix(velocity_density[i].y, -velocity_density[i].y * damping, belowFloor);
 }

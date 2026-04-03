@@ -16,8 +16,15 @@ public:
     float          dt;
     float          currTime;
     float          lastTime;
+    unsigned int   particleCount;
 
-    GLuint         particleSSBO;
+    GLuint         position_massSSBO;
+    GLuint         velocity_densitySSBO;
+    GLuint         force_pressureSSBO;
+    GLuint         color_paddingSSBO;
+
+    // Holds all sphere data in the simulation
+    Particles                           particles;
 
     Scene();
 
@@ -25,23 +32,24 @@ public:
     Sphere3D&                           getGlobalSphere();
 
     // -------- Sphere control functions ---------
-    void                                addSphere(Particle sphere);
     void                                addSurface(SurfaceInstanceData surface);
     SurfaceInstanceData                 createSurface(sNormal normal, uint density, float distance);
     bool                                hasNoSpheres();
-    unsigned int                        getSpheresDataSize();
-    unsigned int                        getSpheresSize();
-    const void*                         getSpheresData();
-    std::vector<Particle>&              getSpheres();
+    unsigned int                        getParticleCount();
+
+    // -------- Physical data flow --------
+    unsigned int                        getPropertyDataSize();
+    const void*                         getPositionMassData();
+    const void*                         getVelocityDensityData();
+    const void*                         getForcePressureData();
+    const void*                         getColorPaddingData();
+    Particles&                          getSpheres();
 
 private:
     // Global sphere mesh
     Sphere3D                            globalSphere;
 
     Surface3D                           surfaceMesh;   
-
-    // Holds all sphere data in the simulation
-    std::vector<Particle>               Spheres;
 
     // Holds all surface instances in the sim
     std::vector<SurfaceInstanceData>    Surfaces; 
