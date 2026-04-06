@@ -12,24 +12,32 @@ class Physics {
 public: 
     Physics(Scene& activeScene);
 
-    void         setDensityUniforms();
-    void         setPressureUniforms();
-    void         setForceUniforms();
-    void         updateFrame();
-    void         cleanup();
-    void         initSSBO();
-    void         setSmoothingRadius(float s);
-    float        getSmoothingRadius();
+    void            setCountSortUniforms();
+    void            setDensityUniforms();
+    void            setPressureUniforms();
+    void            setForceUniforms();
+    void            setGridUniforms();
+    void            updateFrame();
+    void            cleanup();
+    void            initSSBOs();
+    void            buildGrid();
+    void            updateSPH();
+    unsigned int    getCountBufferDataSize();
+    void            setSmoothingRadius(float s);
+    float           getSmoothingRadius();
 
-    float        timeAccumulator;
+    float           timeAccumulator;
+    unsigned int    numGroups;
 
 private:
-    Scene&       physicsScene;
-    Shader       densityShader;
-    Shader       pressureShader;
-    Shader       forceShader;
+    Scene&          physicsScene;
+    Shader          densityShader;
+    Shader          pressureShader;
+    Shader          forceShader;
+    Shader          gridHashShader;
+    Shader          countBufferShader;
 
-    float        SMOOTHING_RADIUS;
+    float           SMOOTHING_RADIUS;
 };
 
 #endif

@@ -1,5 +1,7 @@
 # FluX
 
+**Currently under work**
+
 FluX is a real-time 3D particle-based fluid simulator built from scratch with C++ and OpenGL 4.6. It uses **Smoothed Particle Hydrodynamics (SPH)** to simulate fluid behavior entirely on the GPU via compute shaders.
 
 ---
@@ -74,8 +76,16 @@ make -j$(nproc)
 | `W` / `S` | Move forward / backward |
 | `A` / `D` | Strafe left / right |
 | `Space` / `Ctrl` | Move up / down |
-| `Mouse` | Look around |
+| `Mouse` | Look around (sensitivity: 0.5, configurable) |
 | `Esc` | Quit |
+
+## Runtime Parameters
+
+The event system allows real-time adjustment of key simulation parameters. Supported events:
+- **Viscosity** — Adjust fluid viscosity for different flow characteristics
+- **Smoothing Radius** — Modify neighbor search distance (updates SPH kernel computations)
+- **Mesh Subdivisions** — Increase particle sphere tessellation for visual quality
+- **Gravity** — Change gravitational acceleration
 
 ## How It Works
 
@@ -94,8 +104,48 @@ make -j$(nproc)
 - [ ] Scale to 10k–100k+ particles
 - [ ] Wall boundaries on all sides
 - [ ] Surface mesh rendering (marching cubes or screen-space fluids)
-- [ ] Runtime parameter tuning via the event system
+
+## Configuration
+
+All simulator constants are defined in [settings.h](include/settings.h) and compiled into the binary:
+
+```cpp
+// SPH Parameters (SI units)
+K = 500,000 Pa          // Stiffness (from Tait equation: ρ₀c² / γ, c ≈ 60 m/s)
+RHO_0 = 1,000 kg/m³     // Water resting density
+GAMMA = 7               // Polytropic index
+
+// Time Integration
+PHYSICS_DT = 0.002 s    // Compute shader timestep (200 Hz)
+RENDER_DT = 0.0166 s    // Render loop timestep (60 Hz target)
+
+// Camera (First-person)
+FOV = 90°, Mouse sensitivity = 0.5
+Movement speed = 0.5 m/s
+Default position = (0, 0, 2)
+
+// Scene
+Window = 1920×1200
+Floor boundary at Y = -20.0
+```
+
+## Code Architecture
+
+| Component | Responsibility | Key Files |
+|-----------|-----------------|-----------|
+| **Mesh** | Cube-sphere mesh generation and grid surface creation | `Sphere3D.{h,cpp}`, `Surface3D.{h,cpp}` |
+| **Renderer** | OpenGL VAO/VBO management, instanced rendering, camera & input | `renderer.{h,cpp}`, `camera.{h,cpp}`, `shader.{h,cpp}` |
+| **Physics** | Compute shader dispatch, SSBO management, SPH state integration | `physics.{h,cpp}` |
+| **Scene** | Particle state storage and retrieval across pipelines | `scene.{h,cpp}`, `body.h` |
+| **Utilities** | Priority-queue event system for runtime parameter updates | `eventHandler.{h,cpp}` |
+
+## Performance Characteristics
+
+- **Compute workload:** 3 passes × 256-thread workgroups = ~12 dispatches/frame
+- **Render workload:** ~4M triangle vertices/frame (4,096 particles × 1,024 indices per sphere)
+- **Memory footprint:** ~256 KB (4,096 particles × 64 bytes)
+- **Sync points:** 2 pipeline memory barriers per compute pass
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) — © 2026 Ananya Srivastava

@@ -3,7 +3,7 @@
 // ____ Constructors ____
 Sphere3D::Sphere3D() 
     :
-    uSubdivisions(4), 
+    uSubdivisions(SPHERE_SUBDIVISIONS), 
     uPointsPerRow(0),
     uPointsPerFace(0),
     bDirtyMesh(false),

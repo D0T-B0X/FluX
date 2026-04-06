@@ -9,6 +9,8 @@ Scene::Scene()
     velocity_densitySSBO(0),
     force_pressureSSBO(0),
     color_paddingSSBO(0),
+    cell_indexSSBO(0),
+    count_buffSSBO(0),
     particleCount(0)
     { }
 
@@ -37,6 +39,10 @@ unsigned int Scene::getParticleCount() {
 }
 unsigned int Scene::getPropertyDataSize() {
     return particleCount * sizeof(glm::vec4);
+}
+
+unsigned int Scene::getParticleCountSize() {
+    return particleCount * sizeof(unsigned int);
 }
 
 const void* Scene::getPositionMassData() {

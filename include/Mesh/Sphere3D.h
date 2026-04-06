@@ -5,6 +5,8 @@
 #include <iostream>
 #include <glm/glm.hpp>
 
+#include "settings.h" 
+
 typedef unsigned int uint;
 
 inline constexpr float EPSILON = 1e-8;

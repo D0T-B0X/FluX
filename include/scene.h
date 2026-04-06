@@ -22,6 +22,8 @@ public:
     GLuint         velocity_densitySSBO;
     GLuint         force_pressureSSBO;
     GLuint         color_paddingSSBO;
+    GLuint         cell_indexSSBO;
+    GLuint         count_buffSSBO;
 
     // Holds all sphere data in the simulation
     Particles                           particles;
@@ -39,6 +41,7 @@ public:
 
     // -------- Physical data flow --------
     unsigned int                        getPropertyDataSize();
+    unsigned int                        getParticleCountSize();
     const void*                         getPositionMassData();
     const void*                         getVelocityDensityData();
     const void*                         getForcePressureData();
