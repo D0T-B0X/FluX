@@ -19,6 +19,7 @@ public:
     void            setGridUniforms();
     void            updateFrame();
     void            cleanup();
+    void            setupSSBO(Buffer& b);
     void            initSSBOs();
     void            buildGrid();
     void            updateSPH();
@@ -36,6 +37,7 @@ private:
     Shader          forceShader;
     Shader          gridHashShader;
     Shader          countBufferShader;
+    Shader          prefixSumShader;
 
     float           SMOOTHING_RADIUS;
 };

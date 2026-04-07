@@ -4,12 +4,13 @@
 #define FLOOR -20.0f
 
 #include "Object/body.h"
+#include "Object/buffer.h"
 
 // OpenGL and GLFW helper libraries
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-struct Scene {
+class Scene {
 public:
 
     // ------ Program timing variables -------
@@ -18,12 +19,14 @@ public:
     float          lastTime;
     unsigned int   particleCount;
 
-    GLuint         position_massSSBO;
-    GLuint         velocity_densitySSBO;
-    GLuint         force_pressureSSBO;
-    GLuint         color_paddingSSBO;
-    GLuint         cell_indexSSBO;
-    GLuint         count_buffSSBO;
+    // ------ Simulation storage buffers ------
+    Buffer         position_massSSBO;
+    Buffer         velocity_densitySSBO;
+    Buffer         force_pressureSSBO;
+    Buffer         color_paddingSSBO;
+    Buffer         cell_indexSSBO;
+    Buffer         count_buffSSBO;
+    Buffer         offset_buffSSBO;
 
     // Holds all sphere data in the simulation
     Particles                           particles;

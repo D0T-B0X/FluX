@@ -11,6 +11,7 @@ Physics::Physics(Scene& activeScene)
     forceShader.load(FORCE_CSHADER_PATH);
     gridHashShader.load(GRID_CELL_CSHADER_PATH);
     countBufferShader.load(COUNT_CSHADER_PATH);
+    prefixSumShader.load(PREFIX_SUM_CSHADER_PATH);
 }
 
 void 
@@ -98,130 +99,73 @@ Physics::cleanup() {
 }
 
 void 
+Physics::setupSSBO(Buffer& b) {
+
+    glGenBuffers(1, &b.bufferID);
+
+    glBindBuffer(
+        GL_SHADER_STORAGE_BUFFER,
+        b.bufferID
+    );
+
+    glBufferData(
+        GL_SHADER_STORAGE_BUFFER,
+        b.bufferDataSize,
+        b.bufferData,
+        GL_DYNAMIC_DRAW
+    );
+
+    glBindBufferBase(
+        GL_SHADER_STORAGE_BUFFER,
+        b.bufferBindBase,
+        b.bufferID
+    );
+}
+
+void
 Physics::initSSBOs() {
-    // Initialize all SSBOs
-    glGenBuffers(1, &physicsScene.position_massSSBO);
-    glGenBuffers(1, &physicsScene.velocity_densitySSBO);
-    glGenBuffers(1, &physicsScene.force_pressureSSBO);
-    glGenBuffers(1, &physicsScene.color_paddingSSBO);
-    glGenBuffers(1, &physicsScene.cell_indexSSBO);
-    glGenBuffers(1, &physicsScene.count_buffSSBO);
 
     // -------- Position Mass buffer --------
-    glBindBuffer(
-        GL_SHADER_STORAGE_BUFFER, 
-        physicsScene.position_massSSBO
-    );
-    
-    glBufferData(
-        GL_SHADER_STORAGE_BUFFER, 
-        physicsScene.getPropertyDataSize(),
-        physicsScene.getPositionMassData(),
-        GL_DYNAMIC_DRAW
-    );
-
-    glBindBufferBase(
-        GL_SHADER_STORAGE_BUFFER, 
-        0, 
-        physicsScene.position_massSSBO
-    );
+    physicsScene.position_massSSBO.bufferDataSize = physicsScene.getPropertyDataSize();
+    physicsScene.position_massSSBO.bufferData = physicsScene.getPositionMassData();
+    physicsScene.position_massSSBO.bufferBindBase = 0;
+    setupSSBO(physicsScene.position_massSSBO);
 
     // -------- Velocity Density buffer --------
-    glBindBuffer(
-        GL_SHADER_STORAGE_BUFFER, 
-        physicsScene.velocity_densitySSBO
-    );
+    physicsScene.velocity_densitySSBO.bufferDataSize = physicsScene.getPropertyDataSize();
+    physicsScene.velocity_densitySSBO.bufferData = physicsScene.getVelocityDensityData();
+    physicsScene.velocity_densitySSBO.bufferBindBase = 1;
+    setupSSBO(physicsScene.velocity_densitySSBO);
     
-    glBufferData(
-        GL_SHADER_STORAGE_BUFFER, 
-        physicsScene.getPropertyDataSize(),
-        physicsScene.getVelocityDensityData(),
-        GL_DYNAMIC_DRAW
-    );
-
-    glBindBufferBase(
-        GL_SHADER_STORAGE_BUFFER, 
-        1, 
-        physicsScene.velocity_densitySSBO
-    );
-
     // -------- Force Pressure buffer --------
-    glBindBuffer(
-        GL_SHADER_STORAGE_BUFFER, 
-        physicsScene.force_pressureSSBO
-    );
-    
-    glBufferData(
-        GL_SHADER_STORAGE_BUFFER, 
-        physicsScene.getPropertyDataSize(),
-        physicsScene.getForcePressureData(),
-        GL_DYNAMIC_DRAW
-    );
-
-    glBindBufferBase(
-        GL_SHADER_STORAGE_BUFFER, 
-        2, 
-        physicsScene.force_pressureSSBO
-    );
+    physicsScene.force_pressureSSBO.bufferDataSize = physicsScene.getPropertyDataSize();
+    physicsScene.force_pressureSSBO.bufferData = physicsScene.getForcePressureData();
+    physicsScene.force_pressureSSBO.bufferBindBase = 2;
+    setupSSBO(physicsScene.force_pressureSSBO);
 
     // -------- Color Paddig buffer --------
-    glBindBuffer(
-        GL_SHADER_STORAGE_BUFFER, 
-        physicsScene.color_paddingSSBO
-    );
-    
-    glBufferData(
-        GL_SHADER_STORAGE_BUFFER, 
-        physicsScene.getPropertyDataSize(),
-        physicsScene.getColorPaddingData(),
-        GL_DYNAMIC_DRAW
-    );
-
-    glBindBufferBase(
-        GL_SHADER_STORAGE_BUFFER, 
-        3, 
-        physicsScene.color_paddingSSBO
-    );
+    physicsScene.color_paddingSSBO.bufferDataSize = physicsScene.getPropertyDataSize();
+    physicsScene.color_paddingSSBO.bufferData = physicsScene.getColorPaddingData();
+    physicsScene.color_paddingSSBO.bufferBindBase = 3;
+    setupSSBO(physicsScene.color_paddingSSBO);
 
     // -------- Cell Index buffer --------
-    glBindBuffer(
-        GL_SHADER_STORAGE_BUFFER,
-        physicsScene.cell_indexSSBO
-    );
-
-    glBufferData(
-        GL_SHADER_STORAGE_BUFFER,
-        physicsScene.getParticleCountSize(),
-        0,
-        GL_DYNAMIC_DRAW
-    );
-
-    glBindBufferBase(
-        GL_SHADER_STORAGE_BUFFER,
-        4,
-        physicsScene.cell_indexSSBO
-    );
+    physicsScene.cell_indexSSBO.bufferDataSize = physicsScene.getParticleCountSize();
+    physicsScene.cell_indexSSBO.bufferData = 0;  // empty buffer
+    physicsScene.cell_indexSSBO.bufferBindBase = 4;
+    setupSSBO(physicsScene.cell_indexSSBO);   
 
     // -------- Count sort buffer --------
-    glBindBuffer(
-        GL_SHADER_STORAGE_BUFFER,
-        physicsScene.count_buffSSBO
-    );
+    physicsScene.count_buffSSBO.bufferDataSize = getCountBufferDataSize();
+    physicsScene.count_buffSSBO.bufferData = 0;  // empty buffer
+    physicsScene.count_buffSSBO.bufferBindBase = 5;
+    setupSSBO(physicsScene.count_buffSSBO);   
 
-    glBufferData(
-        GL_SHADER_STORAGE_BUFFER,
-        getCountBufferDataSize(),
-        0,
-        GL_DYNAMIC_DRAW
-    );
-
-    glBindBufferBase(
-        GL_SHADER_STORAGE_BUFFER,
-        5,
-        physicsScene.count_buffSSBO
-    );
-
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    // -------- Prefix sum offset buffer --------
+    physicsScene.offset_buffSSBO.bufferDataSize = getCountBufferDataSize();
+    physicsScene.offset_buffSSBO.bufferData = 0;  // empty buffer
+    physicsScene.offset_buffSSBO.bufferBindBase = 6;
+    setupSSBO(physicsScene.offset_buffSSBO);   
 }
 
 void 

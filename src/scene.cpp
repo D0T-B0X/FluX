@@ -5,12 +5,6 @@ Scene::Scene()
     dt(0.0f),
     currTime(0.0f),
     lastTime(0.0f),
-    position_massSSBO(0),
-    velocity_densitySSBO(0),
-    force_pressureSSBO(0),
-    color_paddingSSBO(0),
-    cell_indexSSBO(0),
-    count_buffSSBO(0),
     particleCount(0)
     { }
 

@@ -4,7 +4,7 @@
 /**
  * @file settings.h
  * @author DotBox
- * @brief This file is meant to hold all simulator specific constants
+ * @brief This file is meant to hold all simulation constants
  * @version 0.1
  * @date 2025-11-10
  * 
@@ -12,7 +12,7 @@
  * 
  */
 
- #include "glm/common.hpp"
+#include "glm/common.hpp"
 
 // -------- OpenGL Window Settings ----------
 inline const char*              NAME                 =        "FluX";
@@ -28,8 +28,8 @@ inline constexpr float          MOVEMENT_SPEED       =        0.5f;
 
 // -------- Dimensions Constraints ----------
 inline constexpr unsigned int   GRID_SIDE            =        16;
-inline constexpr float          MIN_BOUND            =       -0.5f;
-inline constexpr float          MAX_BOUND            =        0.5f;
+inline constexpr float          MIN_BOUND            =       -1.0f;
+inline constexpr float          MAX_BOUND            =        1.0f;
 inline constexpr float          FLOOR_BOUNDARY       =       -0.1f;
 inline constexpr float          SPHERE_RADIUS        =        0.05f;
 inline constexpr unsigned int   SPHERE_SUBDIVISIONS  =        6;
