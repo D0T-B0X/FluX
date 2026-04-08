@@ -8,6 +8,4 @@ layout(std430, binding = 6) buffer OffsetBuff { uint offsetBuffer[]; };
 void
 main() {
     uint index = gl_GlobalInvocationID.x;
-
-    offsetBuffer[gl_WorkGroupID.x * 4 + gl_LocalInvocationIndex] = countBuff[];
 }
