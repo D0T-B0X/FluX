@@ -2,6 +2,7 @@
 #define PHYSICS_H
 
 #include <glm/glm.hpp>
+#include <bit>
 
 #include "settings.h"
 #include "scene.h"
@@ -40,6 +41,8 @@ private:
     Shader          prefixSumShader;
 
     float           SMOOTHING_RADIUS;
+
+    unsigned int    getPrefixSumScanPassCount(unsigned int n);
 };
 
 #endif

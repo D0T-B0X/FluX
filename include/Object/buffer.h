@@ -5,7 +5,7 @@
 #include <cstddef> // for size_t
 
 struct Buffer {
-    GLuint&           bufferID;
+    GLuint            bufferID;
     GLuint            bufferBindBase;
     size_t            bufferDataSize;
     const void*       bufferData;
