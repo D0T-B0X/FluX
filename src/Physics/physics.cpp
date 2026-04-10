@@ -186,13 +186,11 @@ Physics::buildGrid() {
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 
         // TODO => Remove magic numbers
-        for(int stride_pass = 0; stride_pass < getPrefixSumScanPassCount(numGroups * 4 /*MN*/); stride_pass++) {
-            prefixSumShader.use();
-            prefixSumShader.setInt("stride", static_cast<int>(pow(2, stride_pass)));
+        prefixSumShader.use();
+        prefixSumShader.setInt("passCount", getPrefixSumScanPassCount(numGroups * 4));
 
-            glDispatchCompute(256, 1, 1);
-            glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
-        }
+        glDispatchCompute(numGroups, 1, 1);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
     }
 }
 

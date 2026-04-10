@@ -1,13 +1,24 @@
 #version 460 core
 
+#define OFFSET_BUFFER 6
+#define GLOBAL_DIGIT_OFFSET_BUFFER 7
+
 layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
-layout(std430, binding = 5) buffer CountBuff { uint countBuff[]; };
-layout(std430, binding = 6) buffer OffsetBuff { uint offsetBuffer[]; };
+layout(std430, binding = OFFSET_BUFFER) buffer OffsetBuff { uint offsetBuff[]; };
+layout(std430, binding = GLOBAL_DIGIT_OFFSET_BUFFER) buffer CountBuffColumn { uint countBuffColumn[]; };
 
-uniform int stride;
+uniform int passCount;
+uniform uint numGroups;
+
+shared uint shared_arr[2048];
 
 void
 main() {
     uint index = gl_GlobalInvocationID.x;
+
+    for(uint pass = 0; pass < passCount; pass++) {
+        uint stride = uint(pow(2, pass));
+        
+    }
 }
