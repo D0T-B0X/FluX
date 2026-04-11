@@ -1,131 +1,135 @@
 # FluX
 
-FluX is a real-time GPU fluid simulation playground written in C++/OpenGL 4.6 that combines SPH compute shaders with instanced particle rendering.
+FluX is a real-time fluid simulation project built with C++, OpenGL 4.6, and GLSL compute shaders. It uses an SPH-style particle model on the GPU and renders particles via instanced sphere drawing.
 
-## Current Status
+## Overview
 
-This is an in-progress project. The core simulation/render loop works, and the main SPH pipeline is running on compute shaders.
+The application runs two fixed-step loops:
 
-Partially implemented / planned:
-- Full spatial-hash neighbor lookup integration into SPH passes
-- Surface rendering pipeline completion
-- Event-system driven live parameter changes
+- Physics update at 2 ms per step
+- Render update at 16.6 ms per step
 
-## Features
+At startup, FluX initializes a dense particle block inside a bounded volume, uploads particle properties to SSBOs, runs compute passes each physics tick, and renders all particles as sphere instances.
 
-- GPU compute shader physics (GLSL 460)
-- Particle data stored in SSBOs (`position_mass`, `velocity_density`, `force_pressure`, `color_padding`)
-- SPH kernels in compute shaders:
-   - Poly6 (density)
-   - Spiky gradient (pressure force)
-   - Viscosity Laplacian (viscosity force)
-- Tait equation of state:
+## Current Implementation Status
+
+Implemented and active:
+
+- OpenGL 4.6 renderer with GLFW + GLAD
+- GPU SPH passes:
+   - Density pass (Poly6 kernel)
+   - Pressure pass (Tait equation)
+   - Force/integration pass (pressure, viscosity, gravity, floor collision damping)
+- GPU cell index hashing pass for spatial partitioning
+- Radix-sort support shaders wired into the frame pipeline (count + local scan stages)
+- Instanced sphere rendering with configurable mesh subdivision
+- Free-fly camera controls
+
+In progress:
+
+- Complete and validate full radix-sort pipeline for neighbor-friendly ordering
+- Integrate sorted/grid data into neighbor queries in SPH passes
+- Surface rendering path and event-driven runtime parameter edits
+
+## Simulation Notes
+
+SPH pressure uses the Tait equation:
 
 $$
 p = k\left(\left(\frac{\rho}{\rho_0}\right)^\gamma - 1\right)
 $$
 
-- Cube-sphere mesh generation with configurable subdivision
-- Instanced draw path using `glDrawElementsInstanced`
+Particle attributes are stored in SSBOs:
 
-## How It Works
-
-1. The app initializes a 16 x 16 x 16 particle block (4096 particles) in scene space.
-2. Particle properties are uploaded to SSBOs and shared by compute + render stages.
-3. Each physics step runs:
-    - Grid build passes (`hash_grid_cell_index.comp`, `count.comp`)
-    - SPH passes (`density_pass.comp`, `pressure_pass.comp`, `force_pass.comp`)
-4. Each render step draws one shared sphere mesh as instances for all particles.
+- position_mass
+- velocity_density
+- force_pressure
+- color_padding
+- cell_indices
+- count/offset buffers for sorting stages
 
 ## Controls
 
-- `W` / `S`: move forward / backward
-- `A` / `D`: strafe left / right
-- `Space` / `Left Ctrl`: move up / down
-- `Mouse`: look around
-- `Esc`: exit
+- W / S: move forward / backward
+- A / D: strafe left / right
+- Space / Left Ctrl: move up / down
+- Mouse: look around
+- Esc: close application
+
+## Build Requirements
+
+- Linux
+- OpenGL 4.6 capable GPU/driver
+- C++20 compiler
+- CMake 4.1 or newer
+- GLFW3
+- pkg-config
 
 ## Build and Run
-
-### Requirements
-
-- Linux with OpenGL 4.6 capable GPU/driver
-- C++ compiler with C++17 support
-- CMake (project currently sets `cmake_minimum_required(VERSION 4.1)`)
-- GLFW3 and pkg-config
-
-### Ubuntu/Debian example dependencies
-
-```bash
-sudo apt update
-sudo apt install -y build-essential cmake pkg-config libglfw3-dev
-```
-
-### Build
 
 ```bash
 mkdir -p build
 cd build
 cmake ..
-make -j"$(nproc)"
+cmake --build . -j"$(nproc)"
 ./FluX
 ```
 
-## Project Layout
+## Key Configuration
+
+Primary simulation and runtime constants are defined in include/settings.h.
+
+Current defaults include:
+
+- Window size: 1920 x 1200
+- Grid side length: 47
+- Particle count at startup: 47^3 = 103,823
+- Physics step: 0.002 s
+- Render step: 0.0166 s
+- Rest density: 1000 kg/m^3
+- Gravity: (0, -9.81, 0)
+- Compute workgroup size: 256 threads
+
+## Project Structure
 
 ```text
 FluX/
    include/
+      Physics/
+      Renderer/
+      Mesh/
+      Object/
+      util/
       application.h
       scene.h
       settings.h
-      Mesh/
-      Object/
+   src/
       Physics/
       Renderer/
+      Mesh/
       util/
-   src/
-      main.cpp
       application.cpp
       scene.cpp
-      Mesh/
-      Physics/
-      Renderer/
-      util/
+      main.cpp
+      glad.c
    shaders/
-      Render/
-         vSphere.glsl
-         fSphere.glsl
-         vSurface.glsl
-         fSurface.glsl
       SPH/
          density_pass.comp
          pressure_pass.comp
          force_pass.comp
       SpatialHashing/
          hash_grid_cell_index.comp
-         count.comp
+         RadixSort/
+            count.comp
+            local_scan.comp
+      Render/
+         vSphere.glsl
+         fSphere.glsl
+         vSurface.glsl
+         fSurface.glsl
    CMakeLists.txt
    config.h.in
 ```
-
-## Key Configuration
-
-Simulation and camera constants live in `include/settings.h`.
-
-Notable defaults:
-- Window: `1920 x 1200`
-- Physics step: `PHYSICS_DT = 0.002`
-- Render step: `RENDER_DT = 0.0166`
-- Rest density: `1000 kg/m^3`
-- Stiffness: `500000`
-- Gravity: `(0, -9.81, 0)`
-
-## Notes for Contributors
-
-- Shader file paths are generated by CMake into `build/config.h` from `config.h.in`.
-- Compute workgroup size is currently `256` threads (`local_size_x = 256`).
-- Some subsystems are present but still stubbed/incomplete (for example portions of the event handler and surface rendering).
 
 ## License
 
