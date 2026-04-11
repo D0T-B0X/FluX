@@ -20,6 +20,8 @@ public:
     void            setForceUniforms();
     void            setGridUniforms();
     void            setLocalScanUniforms();
+    void            setBlockSumScanUniforms();
+    void            setCombineUniforms();
 
 // -------- Engine setup --------
     void            setupSSBO(Buffer& b);
@@ -48,6 +50,7 @@ private:
     Shader          countBufferShader;
     Shader          localScanShader;
     Shader          blockSumScanShader;
+    Shader          combineShader;
 
     float           SMOOTHING_RADIUS;
     unsigned int    workgroupCount;

@@ -27,7 +27,7 @@ inline constexpr float          MOUSE_SENSITIVITY    =        0.5f;
 inline constexpr float          MOVEMENT_SPEED       =        0.5f;
 
 // -------- Dimensions Constraints ----------
-inline constexpr unsigned int   GRID_SIDE            =        47u;
+inline constexpr unsigned int   GRID_SIDE            =        16u;
 inline constexpr float          MIN_BOUND            =       -2.0f;
 inline constexpr float          MAX_BOUND            =        2.0f;
 inline constexpr float          FLOOR_BOUNDARY       =       -0.1f;

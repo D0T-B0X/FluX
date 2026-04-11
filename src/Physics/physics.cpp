@@ -14,6 +14,7 @@ Physics::Physics(Scene& activeScene)
     countBufferShader.load(COUNT_CSHADER_PATH);
     localScanShader.load(LOCAL_SCAN_CSHADER_PATH);
     blockSumScanShader.load(BLOCK_SUM_SCAN_CSHADER_PATH);
+    combineShader.load(COMBINE_CSHADER_PATH);
 }
 
 void 
@@ -100,6 +101,20 @@ Physics::setLocalScanUniforms() {
     localScanShader.setInt("workGroupCount", workgroupCount);
 }
 
+void
+Physics::setBlockSumScanUniforms() {
+    blockSumScanShader.use();
+
+    blockSumScanShader.setInt("blockSumSize", ceil((float)workgroupCount / (float)THREADS_PER_GROUP) * 4);
+}
+
+void
+Physics::setCombineUniforms() {
+    combineShader.use();
+
+    combineShader.setInt("workGroupCount", workgroupCount);
+}
+
 void 
 Physics::cleanup() {
     
@@ -174,11 +189,17 @@ Physics::initSSBOs() {
     physicsScene.blockSum_buffSSBO.bufferBindBase = 6;
     setupSSBO(physicsScene.blockSum_buffSSBO);   
 
-    // -------- Prefix sum offset buffer --------
+    // -------- Local prefix sum offset buffer --------
     physicsScene.localSum_buffSSBO.bufferDataSize = getCountBufferDataSize();
     physicsScene.localSum_buffSSBO.bufferData = 0;  // empty buffer
     physicsScene.localSum_buffSSBO.bufferBindBase = 7;
     setupSSBO(physicsScene.localSum_buffSSBO);   
+
+    // -------- Global Offset buffer --------
+    physicsScene.offset_buffSSBO.bufferDataSize = getCountBufferDataSize();
+    physicsScene.offset_buffSSBO.bufferData = 0;  // empty buffer
+    physicsScene.offset_buffSSBO.bufferBindBase = 8;
+    setupSSBO(physicsScene.offset_buffSSBO);   
 }
 
 void 
@@ -202,7 +223,7 @@ Physics::buildGrid() {
         localScanShader.use();
         localScanShader.setInt("passCount", getScanPassCount(workgroupCount));
 
-        unsigned int localScanDispatchSize = (unsigned int)ceil(workgroupCount / THREADS_PER_GROUP);
+        unsigned int localScanDispatchSize = (unsigned int)ceil((float)workgroupCount / (float)THREADS_PER_GROUP);
         glDispatchCompute(localScanDispatchSize, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 
@@ -210,14 +231,18 @@ Physics::buildGrid() {
         blockSumScanShader.setInt("passCount", getScanPassCount(localScanDispatchSize));
         glDispatchCompute(1, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
+
+        combineShader.use();
+        glDispatchCompute(localScanDispatchSize, 1, 1);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
     }
 }
 
 void
 Physics::setWorkGroupCount() {
     // Lacks proper error handling :/
-    if (physicsScene.particleCount < 1) workgroupCount = 1;
-    workgroupCount = ceil(physicsScene.particleCount / THREADS_PER_GROUP);
+    if (physicsScene.particleCount < 1) { workgroupCount = 1; return; }
+    workgroupCount = ceil((float)physicsScene.particleCount / (float)THREADS_PER_GROUP);
 }
 
 void
@@ -241,7 +266,7 @@ Physics::computeSPHUpdates() {
 }
 
 unsigned int 
-Physics::getPrefixSumScanPassCount(unsigned int n) {
+Physics::getScanPassCount(unsigned int n) {
     if (n <= 1) return 0;
     return std::bit_width(n - 1);
 }

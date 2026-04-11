@@ -27,7 +27,7 @@ main() {
     uint localIndex = gl_LocalInvocationIndex;
 
     // add count buffer values to shared buffer and add padding if necessary
-    if (localIndex < workGroupCount) {
+    if (globalIndex < workGroupCount) {
         local_buffer[localIndex] = countBuff[globalIndex];
     } else {
         local_buffer[localIndex] = uvec4(0);

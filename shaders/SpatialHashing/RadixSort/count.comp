@@ -24,7 +24,7 @@ main() {
     atomicAdd(count[digit], 1);
     barrier();
 
-    if (index == 0) {
+    if (gl_LocalInvocationIndex == 0) {
         countBuff[gl_WorkGroupID.x] = count;
     }
 }

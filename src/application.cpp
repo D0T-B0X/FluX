@@ -111,6 +111,8 @@ App::setup() {
     pEngine.setForceUniforms();
     pEngine.setWorkGroupCount();    
     pEngine.setLocalScanUniforms();
+    pEngine.setBlockSumScanUniforms();
+    pEngine.setCombineUniforms();
     pEngine.initSSBOs();
 
     // Render setup

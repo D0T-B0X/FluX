@@ -28,6 +28,7 @@ public:
     Buffer         count_buffSSBO;
     Buffer         blockSum_buffSSBO;
     Buffer         localSum_buffSSBO;
+    Buffer         offset_buffSSBO;
 
     // Holds all sphere data in the simulation
     Particles                           particles;
