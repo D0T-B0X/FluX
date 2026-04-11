@@ -109,6 +109,7 @@ App::setup() {
     pEngine.setDensityUniforms();
     pEngine.setPressureUniforms();
     pEngine.setForceUniforms();
+    pEngine.setWorkGroupCount();    
     pEngine.initSSBOs();
 
     // Render setup

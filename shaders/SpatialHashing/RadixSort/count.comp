@@ -2,13 +2,13 @@
 
 layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
-layout(std430, binding = 4) buffer CellIndex { uint cell_indices[]; };
-layout(std430, binding = 5) buffer CountBuff { uint countBuff[]; };
+layout(std430, binding = 4) readonly buffer CellIndex { uint cell_indices[]; };
+layout(std430, binding = 5) buffer CountBuff { uvec4 countBuff[]; };
 
 uniform int numParticles;
 uniform int shift_key;
 
-shared uint count[4];
+shared uvec4 count;
 
 void
 main() {
@@ -24,7 +24,7 @@ main() {
     atomicAdd(count[digit], 1);
     barrier();
 
-    if (gl_LocalInvocationIndex < 4) {
-        countBuff[gl_WorkGroupID.x * 4 + gl_LocalInvocationIndex] = count[gl_LocalInvocationIndex];
+    if (index == 0) {
+        countBuff[gl_WorkGroupID.x] = count;
     }
 }

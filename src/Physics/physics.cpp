@@ -3,7 +3,8 @@
 Physics::Physics(Scene& activeScene) 
     : 
     physicsScene(activeScene),
-    timeAccumulator(0)
+    timeAccumulator(0),
+    workgroupCount(0)
 { 
     SMOOTHING_RADIUS = 0.0f;
     densityShader.load(DENSITY_CSHADER_PATH);
@@ -11,14 +12,11 @@ Physics::Physics(Scene& activeScene)
     forceShader.load(FORCE_CSHADER_PATH);
     gridHashShader.load(GRID_CELL_CSHADER_PATH);
     countBufferShader.load(COUNT_CSHADER_PATH);
-    prefixSumShader.load(PREFIX_SUM_CSHADER_PATH);
+    localScanShader.load(LOCAL_SCAN_CSHADER_PATH);
 }
 
 void 
 Physics::updateFrame() {
-
-    int threadsPerGroup = 256;
-    numGroups = (physicsScene.particleCount + threadsPerGroup - 1) / threadsPerGroup;
 
     buildGrid();
     updateSPH();
@@ -91,6 +89,14 @@ Physics::setForceUniforms() {
     // Floor boundary
     forceShader.setFloat("floorY", FLOOR_BOUNDARY);
     forceShader.setFloat("damping", DAMPING_COEFF);
+}
+
+void
+Physics::setLocalScanUniforms() {
+    localScanShader.use();
+
+    // 4 way radix sort 
+    localScanShader.setInt("workGroupCount", workgroupCount);
 }
 
 void 
@@ -173,7 +179,7 @@ Physics::buildGrid() {
 
     // Calculate uniform grid hash cells
     gridHashShader.use();
-    glDispatchCompute(numGroups, 1, 1);
+    glDispatchCompute(workgroupCount, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 
     // count histogram pass
@@ -182,16 +188,26 @@ Physics::buildGrid() {
         countBufferShader.use();
         countBufferShader.setInt("shift_key", shift_key);
 
-        glDispatchCompute(numGroups, 1, 1);
+        glDispatchCompute(workgroupCount, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
+
+        // TODO => Create countBuffColumn buffer
+        // TODO => Implement transpose shader
 
         // TODO => Remove magic numbers
-        prefixSumShader.use();
-        prefixSumShader.setInt("passCount", getPrefixSumScanPassCount(numGroups * 4));
+        localScanShader.use();
+        localScanShader.setInt("passCount", getPrefixSumScanPassCount(workgroupCount * 4));
 
-        glDispatchCompute(numGroups, 1, 1);
+        glDispatchCompute(workgroupCount, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
     }
+}
+
+void
+Physics::setWorkGroupCount() {
+    // Lacks proper error handling :/
+    if (physicsScene.particleCount < 1) workgroupCount = 1;
+    workgroupCount = ceil(physicsScene.particleCount / THREADS_PER_GROUP);
 }
 
 void
@@ -199,18 +215,18 @@ Physics::updateSPH() {
     
     // Density calculations pass
     densityShader.use();
-    glDispatchCompute(numGroups, 1, 1);
+    glDispatchCompute(workgroupCount, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 
     // Pressure calculations pass
     pressureShader.use();
-    glDispatchCompute(numGroups, 1, 1);
+    glDispatchCompute(workgroupCount, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 
     // Pressure force calculations pass
     forceShader.use();
     forceShader.setFloat("dt", PHYSICS_DT);
-    glDispatchCompute(numGroups, 1, 1);
+    glDispatchCompute(workgroupCount, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 }
 
@@ -222,7 +238,7 @@ Physics::getPrefixSumScanPassCount(unsigned int n) {
 
 unsigned int
 Physics::getCountBufferDataSize() {
-    return numGroups * 4 * sizeof(GLuint); // 4 integers (4 way radix) for each workgroup
+    return workgroupCount * 4 * sizeof(GLuint); // 4 integers (4 way radix) for each workgroup
 }
 
 void 

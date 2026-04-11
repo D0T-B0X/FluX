@@ -13,23 +13,31 @@ class Physics {
 public: 
     Physics(Scene& activeScene);
 
+// -------- Uniform uploads --------
     void            setCountSortUniforms();
     void            setDensityUniforms();
     void            setPressureUniforms();
     void            setForceUniforms();
     void            setGridUniforms();
-    void            updateFrame();
-    void            cleanup();
+    void            setLocalScanUniforms();
+
+// -------- Engine setup --------
     void            setupSSBO(Buffer& b);
     void            initSSBOs();
     void            buildGrid();
+    void            setWorkGroupCount();
+
+// -------- Real-time simulation updates --------
+    void            updateFrame();
+    void            cleanup();
     void            updateSPH();
+
+// -------- Miscllaneous --------
     unsigned int    getCountBufferDataSize();
     void            setSmoothingRadius(float s);
     float           getSmoothingRadius();
 
     float           timeAccumulator;
-    unsigned int    numGroups;
 
 private:
     Scene&          physicsScene;
@@ -38,9 +46,10 @@ private:
     Shader          forceShader;
     Shader          gridHashShader;
     Shader          countBufferShader;
-    Shader          prefixSumShader;
+    Shader          localScanShader;
 
     float           SMOOTHING_RADIUS;
+    unsigned int    workgroupCount;
 
     unsigned int    getPrefixSumScanPassCount(unsigned int n);
 };

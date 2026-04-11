@@ -1,0 +1,63 @@
+#version 460 core
+
+#define COUNT_BUFFER 5
+#define OFFSET_BUFFER 6
+#define GROUP_THREAD_COUNT 256
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, binding = OFFSET_BUFFER) buffer OffsetBuff { uint offsetBuff[]; };
+layout(std430, binding = COUNT_BUFFER) readonly buffer CountBuff { uvec4 countBuff[]; };
+
+uniform uint workGroupCount;
+
+// log2(THREADS_PER_GROUP) needed for sweep up stride calculations
+const      uint     passCount = 8;
+
+// local buffer of size GROUP_SIZE (256) needed to account for all 4 digits per thread
+shared     uvec4    local_buffer[GROUP_THREAD_COUNT];
+
+void
+main() {
+    uint globalIndex = gl_GlobalInvocationID.x;
+    uint wgIndex = gl_WorkGroupID.x;
+    uint localIndex = gl_LocalInvocationIndex;
+
+    // add count buffer values to shared buffer and add padding if necessary
+    if (localIndex < workGroupCount) {
+        local_buffer[localIndex] = countBuff[globalIndex];
+    } else {
+        local_buffer[localIndex] = uvec4(0);
+    }
+    barrier();
+
+    // sweep up phase
+    
+    for (int pass = 0; pass < passCount; ++pass) {
+        uint stride = 1u << pass; // 2 ^ pass to get the pass stride value
+
+        // add left and right child values then store it in the right child
+        if ((localIndex + 1) % (2 * stride) == 0) {
+            local_buffer[localIndex] = local_buffer[localIndex] + local_buffer[localIndex - stride];
+        } 
+        barrier();
+    }
+
+    // downsweep phase
+
+    // set the last block to 0
+    if (localIndex == GROUP_THREAD_COUNT - 1) local_buffer[localIndex] = uvec4(0);
+    barrier();
+    
+    // perform downsweep
+    for(int pass = 0; pass < passCount; ++pass) {
+        uint stride = 1u << (passCount - pass - 1);
+
+        if ((localIndex + 1) % (2 * stride) == 0) {
+            uvec4 right = local_buffer[localIndex];
+            local_buffer[localIndex] = local_buffer[localIndex] + local_buffer[localIndex - stride];
+            local_buffer[localIndex - stride] = right; 
+        }
+        barrier();
+    }
+}
