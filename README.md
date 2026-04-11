@@ -1,43 +1,35 @@
 # FluX
 
-FluX is a real-time fluid simulation project built with C++, OpenGL 4.6, and GLSL compute shaders. It uses an SPH-style particle model on the GPU and renders particles via instanced sphere drawing.
+FluX is a GPU-based fluid simulation prototype written in C++ and OpenGL 4.6. It combines SPH-inspired compute passes with instanced sphere rendering for real-time visualization.
 
-## Overview
+## Highlights
 
-The application runs two fixed-step loops:
+- Modern OpenGL 4.6 pipeline using GLFW and GLAD
+- Compute-shader simulation passes for density, pressure, and force/integration
+- Uniform-grid cell hashing and radix-sort prefix-scan stages
+- Instanced rendering of particle spheres
+- Fixed-step simulation and rendering loops
+- Free-fly camera controls for scene inspection
 
-- Physics update at 2 ms per step
-- Render update at 16.6 ms per step
+## Architecture Overview
 
-At startup, FluX initializes a dense particle block inside a bounded volume, uploads particle properties to SSBOs, runs compute passes each physics tick, and renders all particles as sphere instances.
+FluX is organized into three primary runtime components:
 
-## Current Implementation Status
+- Application layer: Initializes scene state, configures simulation parameters, and runs fixed-step loops.
+- Physics engine: Owns compute shaders, uploads SSBOs, computes cell hashes, and executes SPH passes.
+- Renderer: Creates window/context, uploads sphere mesh data, and draws particles each render tick.
 
-Implemented and active:
+At startup, the app generates an initial particle block inside a bounded volume and uploads particle attributes to shader storage buffer objects (SSBOs).
 
-- OpenGL 4.6 renderer with GLFW + GLAD
-- GPU SPH passes:
-   - Density pass (Poly6 kernel)
-   - Pressure pass (Tait equation)
-   - Force/integration pass (pressure, viscosity, gravity, floor collision damping)
-- GPU cell index hashing pass for spatial partitioning
-- Radix-sort support shaders wired into the frame pipeline (count + local scan stages)
-- Instanced sphere rendering with configurable mesh subdivision
-- Free-fly camera controls
+## Simulation Pipeline
 
-In progress:
+Each physics update executes the following high-level flow:
 
-- Complete and validate full radix-sort pipeline for neighbor-friendly ordering
-- Integrate sorted/grid data into neighbor queries in SPH passes
-- Surface rendering path and event-driven runtime parameter edits
-
-## Simulation Notes
-
-SPH pressure uses the Tait equation:
-
-$$
-p = k\left(\left(\frac{\rho}{\rho_0}\right)^\gamma - 1\right)
-$$
+1. Grid build pass
+2. Radix-sort support passes (count, local scan, block-sum scan, combine)
+3. SPH density pass
+4. SPH pressure pass
+5. SPH force/integration pass
 
 Particle attributes are stored in SSBOs:
 
@@ -45,92 +37,119 @@ Particle attributes are stored in SSBOs:
 - velocity_density
 - force_pressure
 - color_padding
-- cell_indices
-- count/offset buffers for sorting stages
+- cell_index
+- count/block/local/offset buffers for sort support
+
+Pressure uses a Tait-style equation of state.
 
 ## Controls
 
-- W / S: move forward / backward
-- A / D: strafe left / right
-- Space / Left Ctrl: move up / down
-- Mouse: look around
-- Esc: close application
+- W / S: Move forward and backward
+- A / D: Strafe left and right
+- Space / Left Ctrl: Move up and down
+- Mouse: Look around
+- Esc: Exit
 
-## Build Requirements
+## Requirements
 
 - Linux
-- OpenGL 4.6 capable GPU/driver
+- OpenGL 4.6-capable GPU and driver
 - C++20 compiler
-- CMake 4.1 or newer
+- CMake 4.1+
 - GLFW3
 - pkg-config
 
 ## Build and Run
 
 ```bash
-mkdir -p build
-cd build
-cmake ..
-cmake --build . -j"$(nproc)"
-./FluX
+cmake -S . -B build
+cmake --build build -j"$(nproc)"
+./build/FluX
 ```
 
-## Key Configuration
+## Configuration
 
-Primary simulation and runtime constants are defined in include/settings.h.
+Primary runtime constants are defined in include/settings.h.
 
-Current defaults include:
+Current defaults:
 
-- Window size: 1920 x 1200
-- Grid side length: 47
-- Particle count at startup: 47^3 = 103,823
-- Physics step: 0.002 s
-- Render step: 0.0166 s
-- Rest density: 1000 kg/m^3
-- Gravity: (0, -9.81, 0)
-- Compute workgroup size: 256 threads
+- Window: 1920 x 1200
+- Grid side length: 16
+- Initial particle count: 16^3 = 4096
+- Physics timestep: 0.0020 s
+- Render timestep: 0.0166 s
+- Rest density: 1000.0 kg/m^3
+- Gravity: (0.0, -9.81, 0.0)
+- Compute local size: 256 threads
 
-## Project Structure
+Shader source paths are generated at configure time through config.h.
+
+## Current Status
+
+Implemented:
+
+- Core simulation and rendering loop
+- SPH density/pressure/force passes
+- Particle floor collision response
+- Cell hash generation
+- Radix-sort support stage wiring
+- Instanced sphere rendering
+
+In progress or partial:
+
+- End-to-end sorted-neighbor usage in SPH kernels
+- Surface rendering path
+- Event-driven runtime parameter updates
+
+## Limitations
+
+- SPH compute shaders currently perform full particle-pair loops, which are expensive at larger particle counts.
+- Event handling scaffolding exists but is not yet integrated as a complete runtime system.
+- Surface generation and rendering are present as scaffolding and are not part of the active rendering flow.
+
+## Repository Layout
 
 ```text
 FluX/
-   include/
-      Physics/
-      Renderer/
-      Mesh/
-      Object/
-      util/
-      application.h
-      scene.h
-      settings.h
-   src/
-      Physics/
-      Renderer/
-      Mesh/
-      util/
-      application.cpp
-      scene.cpp
-      main.cpp
-      glad.c
-   shaders/
-      SPH/
-         density_pass.comp
-         pressure_pass.comp
-         force_pass.comp
-      SpatialHashing/
-         hash_grid_cell_index.comp
-         RadixSort/
-            count.comp
-            local_scan.comp
-      Render/
-         vSphere.glsl
-         fSphere.glsl
-         vSurface.glsl
-         fSurface.glsl
-   CMakeLists.txt
-   config.h.in
+  include/
+    Physics/
+    Renderer/
+    Mesh/
+    Object/
+    util/
+    application.h
+    scene.h
+    settings.h
+  src/
+    Physics/
+    Renderer/
+    Mesh/
+    util/
+    application.cpp
+    scene.cpp
+    main.cpp
+    glad.c
+  shaders/
+    SPH/
+      density_pass.comp
+      pressure_pass.comp
+      force_pass.comp
+    SpatialHashing/
+      hash_grid_cell_index.comp
+      RadixSort/
+        count.comp
+        local_scan.comp
+        block_sum_scan.comp
+        combine.comp
+    Render/
+      vSphere.glsl
+      fSphere.glsl
+      vSurface.glsl
+      fSurface.glsl
+  CMakeLists.txt
+  config.h.in
 ```
 
 ## License
 
-MIT License
+MIT
