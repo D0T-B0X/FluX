@@ -1,18 +1,21 @@
 #version 460 core
 
 #define COUNT_BUFFER 5
-#define OFFSET_BUFFER 6
+#define BLOCK_SUM_BUFFER 6
+#define LOCAL_SUM_BUFFER 7
+
 #define GROUP_THREAD_COUNT 256
 
 layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
-layout(std430, binding = OFFSET_BUFFER) buffer OffsetBuff { uint offsetBuff[]; };
+layout(std430, binding = BLOCK_SUM_BUFFER) buffer BlockSumBuff { uvec4 blockSumBuff[]; };
+layout(std430, binding = LOCAL_SUM_BUFFER) buffer LocalPrefixSumBuff { uvec4 localSumBuff[]; };
 layout(std430, binding = COUNT_BUFFER) readonly buffer CountBuff { uvec4 countBuff[]; };
 
 uniform uint workGroupCount;
 
 // log2(THREADS_PER_GROUP) needed for sweep up stride calculations
-const      uint     passCount = 8;
+const      uint     passCount = uint(log2(float(GROUP_THREAD_COUNT)));
 
 // local buffer of size GROUP_SIZE (256) needed to account for all 4 digits per thread
 shared     uvec4    local_buffer[GROUP_THREAD_COUNT];
@@ -43,12 +46,17 @@ main() {
         barrier();
     }
 
+    if (localIndex == GROUP_THREAD_COUNT - 1) {
+        // save total sum calculated by the workgroup in a global buffer 
+        blockSumBuff[wgIndex] = local_buffer[localIndex]; 
+
+        // set the last block of the binary tree to 0 to begin downsweep
+        local_buffer[localIndex] = uvec4(0);
+    }
+    barrier();
+
     // downsweep phase
 
-    // set the last block to 0
-    if (localIndex == GROUP_THREAD_COUNT - 1) local_buffer[localIndex] = uvec4(0);
-    barrier();
-    
     // perform downsweep
     for(int pass = 0; pass < passCount; ++pass) {
         uint stride = 1u << (passCount - pass - 1);
@@ -59,5 +67,9 @@ main() {
             local_buffer[localIndex - stride] = right; 
         }
         barrier();
+    }
+
+    if (globalIndex < workGroupCount) {
+        localSumBuff[globalIndex] = local_buffer[localIndex];
     }
 }

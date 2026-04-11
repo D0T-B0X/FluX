@@ -26,7 +26,8 @@ public:
     Buffer         color_paddingSSBO;
     Buffer         cell_indexSSBO;
     Buffer         count_buffSSBO;
-    Buffer         offset_buffSSBO;
+    Buffer         blockSum_buffSSBO;
+    Buffer         localSum_buffSSBO;
 
     // Holds all sphere data in the simulation
     Particles                           particles;

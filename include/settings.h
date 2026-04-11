@@ -17,8 +17,8 @@
 // -------- OpenGL Window Settings ----------
 inline const char*              NAME                 =        "FluX";
 
-inline const unsigned int       SCR_WIDTH            =        1920;
-inline const unsigned int       SCR_HEIGHT           =        1200;
+inline const unsigned int       SCR_WIDTH            =        1920u;
+inline const unsigned int       SCR_HEIGHT           =        1200u;
 
 // -------- Camera Settings -----------------
 inline constexpr glm::vec3      CAMERA_POSITION      =        glm::vec3(0.0f, 0.0f, 2.0f);
@@ -27,12 +27,12 @@ inline constexpr float          MOUSE_SENSITIVITY    =        0.5f;
 inline constexpr float          MOVEMENT_SPEED       =        0.5f;
 
 // -------- Dimensions Constraints ----------
-inline constexpr unsigned int   GRID_SIDE            =        47;
+inline constexpr unsigned int   GRID_SIDE            =        47u;
 inline constexpr float          MIN_BOUND            =       -2.0f;
 inline constexpr float          MAX_BOUND            =        2.0f;
 inline constexpr float          FLOOR_BOUNDARY       =       -0.1f;
 inline constexpr float          SPHERE_RADIUS        =        0.05f;
-inline constexpr unsigned int   SPHERE_SUBDIVISIONS  =        6;
+inline constexpr unsigned int   SPHERE_SUBDIVISIONS  =        6u;
 
 // -------- SPH constants (SI: kg, m, s) ----
 inline constexpr float          K                    =        500000.0f;    // Pa  (B = ρ₀c²/γ, c ≈ 60 m/s)
@@ -51,6 +51,10 @@ inline constexpr float          DAMPING_COEFF        =        0.3f;
 inline constexpr float          VISCOSITY            =        0.001f;        
 
 // -------- Compute Properties --------------
+
+// **** !! W A R N I N G !! ****
+// **** !! W A R N I N G !! ****
+// DO NOT MODIFY UNLESS YOU KNOW WHAT YOU ARE DOING
 inline constexpr unsigned int   THREADS_PER_GROUP    =        256u;
 
 #endif

@@ -167,11 +167,17 @@ Physics::initSSBOs() {
     physicsScene.count_buffSSBO.bufferBindBase = 5;
     setupSSBO(physicsScene.count_buffSSBO);   
 
+    // -------- Local Scan Block sum buffer --------
+    physicsScene.blockSum_buffSSBO.bufferDataSize = sizeof(uint) * ceil(workgroupCount / THREADS_PER_GROUP) * 4;
+    physicsScene.blockSum_buffSSBO.bufferData = 0;  // empty buffer
+    physicsScene.blockSum_buffSSBO.bufferBindBase = 6;
+    setupSSBO(physicsScene.blockSum_buffSSBO);   
+
     // -------- Prefix sum offset buffer --------
-    physicsScene.offset_buffSSBO.bufferDataSize = getCountBufferDataSize();
-    physicsScene.offset_buffSSBO.bufferData = 0;  // empty buffer
-    physicsScene.offset_buffSSBO.bufferBindBase = 6;
-    setupSSBO(physicsScene.offset_buffSSBO);   
+    physicsScene.localSum_buffSSBO.bufferDataSize = getCountBufferDataSize();
+    physicsScene.localSum_buffSSBO.bufferData = 0;  // empty buffer
+    physicsScene.localSum_buffSSBO.bufferBindBase = 7;
+    setupSSBO(physicsScene.localSum_buffSSBO);   
 }
 
 void 
@@ -191,14 +197,12 @@ Physics::buildGrid() {
         glDispatchCompute(workgroupCount, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 
-        // TODO => Create countBuffColumn buffer
-        // TODO => Implement transpose shader
-
         // TODO => Remove magic numbers
         localScanShader.use();
         localScanShader.setInt("passCount", getPrefixSumScanPassCount(workgroupCount * 4));
 
-        glDispatchCompute(workgroupCount, 1, 1);
+        unsigned int localScanDispatchSize = (unsigned int)ceil(workgroupCount / THREADS_PER_GROUP);
+        glDispatchCompute(localScanDispatchSize, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
     }
 }
