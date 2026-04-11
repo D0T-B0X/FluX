@@ -15,8 +15,6 @@ private:
     Renderer    rEngine;
     Physics     pEngine;
 
-    int last = 0;
-
     void setup();
 };
 

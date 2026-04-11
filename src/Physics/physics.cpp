@@ -13,13 +13,14 @@ Physics::Physics(Scene& activeScene)
     gridHashShader.load(GRID_CELL_CSHADER_PATH);
     countBufferShader.load(COUNT_CSHADER_PATH);
     localScanShader.load(LOCAL_SCAN_CSHADER_PATH);
+    blockSumScanShader.load(BLOCK_SUM_SCAN_CSHADER_PATH);
 }
 
 void 
 Physics::updateFrame() {
 
     buildGrid();
-    updateSPH();
+    computeSPHUpdates();
 }
 
 void 
@@ -188,7 +189,7 @@ Physics::buildGrid() {
     glDispatchCompute(workgroupCount, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 
-    // count histogram pass
+    // Radix sort of hashed cell indices
     // pass the new shift key after each pass
     for (int shift_key = 0; shift_key < 32; shift_key += 2) {
         countBufferShader.use();
@@ -199,10 +200,15 @@ Physics::buildGrid() {
 
         // TODO => Remove magic numbers
         localScanShader.use();
-        localScanShader.setInt("passCount", getPrefixSumScanPassCount(workgroupCount * 4));
+        localScanShader.setInt("passCount", getScanPassCount(workgroupCount));
 
         unsigned int localScanDispatchSize = (unsigned int)ceil(workgroupCount / THREADS_PER_GROUP);
         glDispatchCompute(localScanDispatchSize, 1, 1);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
+
+        blockSumScanShader.use();
+        blockSumScanShader.setInt("passCount", getScanPassCount(localScanDispatchSize));
+        glDispatchCompute(1, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
     }
 }
@@ -215,7 +221,7 @@ Physics::setWorkGroupCount() {
 }
 
 void
-Physics::updateSPH() {
+Physics::computeSPHUpdates() {
     
     // Density calculations pass
     densityShader.use();

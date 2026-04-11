@@ -30,7 +30,7 @@ public:
 // -------- Real-time simulation updates --------
     void            updateFrame();
     void            cleanup();
-    void            updateSPH();
+    void            computeSPHUpdates();
 
 // -------- Miscllaneous --------
     unsigned int    getCountBufferDataSize();
@@ -47,11 +47,12 @@ private:
     Shader          gridHashShader;
     Shader          countBufferShader;
     Shader          localScanShader;
+    Shader          blockSumScanShader;
 
     float           SMOOTHING_RADIUS;
     unsigned int    workgroupCount;
 
-    unsigned int    getPrefixSumScanPassCount(unsigned int n);
+    unsigned int    getScanPassCount(unsigned int n);
 };
 
 #endif
