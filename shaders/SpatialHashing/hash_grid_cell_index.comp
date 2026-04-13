@@ -1,9 +1,14 @@
 #version 460 core
 
+#define POSITION_BUFFER 0
+#define CELL_INDEX_BUFFER 4
+#define PARTICLE_ID_BUFFER 5
+
 layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
-layout(std430, binding = 0) readonly buffer PosBuffer { vec4 position_mass[]; };
-layout(std430, binding = 4) buffer CellIndex { uint cell_indices[]; };
+layout(std430, binding = POSITION_BUFFER) readonly buffer PosBuffer { vec4 position_mass[]; };
+layout(std430, binding = CELL_INDEX_BUFFER) buffer CellIndex { uint cellIndices[]; };
+layout(std430, binding = PARTICLE_ID_BUFFER) buffer ParticleID { uint particleIndices[]; };
 
 uniform int numParticles;
 uniform float cell_size;
@@ -17,5 +22,7 @@ main() {
 
     uvec3 cell_coord = uvec3(floor((position_mass[i].xyz - gridMin) / cell_size));
     cell_coord = clamp(cell_coord, ivec3(0), ivec3(gridSize - 1));
-    cell_indices[i] = (cell_coord.z * gridSize + cell_coord.y) * gridSize + cell_coord.x;
+    cellIndices[i] = (cell_coord.z * gridSize + cell_coord.y) * gridSize + cell_coord.x;
+
+    particleIndices[i] = i;
 }   

@@ -1,3 +1,0 @@
-/home/DotBox/Programming/GraphicsProgramming/OpenGL/FluX/build-warn/CMakeFiles/FluX.dir
-/home/DotBox/Programming/GraphicsProgramming/OpenGL/FluX/build-warn/CMakeFiles/edit_cache.dir
-/home/DotBox/Programming/GraphicsProgramming/OpenGL/FluX/build-warn/CMakeFiles/rebuild_cache.dir

@@ -19,9 +19,11 @@ public:
     void            setPressureUniforms();
     void            setForceUniforms();
     void            setGridUniforms();
+    void            setOrderCheckUniforms();
     void            setLocalScanUniforms();
     void            setBlockSumScanUniforms();
     void            setCombineUniforms();
+    void            setScatterUniforms();
 
 // -------- Engine setup --------
     void            setupSSBO(Buffer& b);
@@ -47,10 +49,12 @@ private:
     Shader          pressureShader;
     Shader          forceShader;
     Shader          gridHashShader;
+    Shader          orderCheckShader;
     Shader          countBufferShader;
     Shader          localScanShader;
     Shader          blockSumScanShader;
     Shader          combineShader;
+    Shader          scatterShader;
 
     float           SMOOTHING_RADIUS;
     unsigned int    workgroupCount;

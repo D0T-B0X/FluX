@@ -25,10 +25,13 @@ public:
     Buffer         force_pressureSSBO;
     Buffer         color_paddingSSBO;
     Buffer         cell_indexSSBO;
+    Buffer         particle_indexSSBO;
+    Buffer         abortFlag_buffSSBO;    
     Buffer         count_buffSSBO;
     Buffer         blockSum_buffSSBO;
     Buffer         localSum_buffSSBO;
     Buffer         offset_buffSSBO;
+    Buffer         finalCellIndex_buffSSBO;
 
     // Holds all sphere data in the simulation
     Particles                           particles;

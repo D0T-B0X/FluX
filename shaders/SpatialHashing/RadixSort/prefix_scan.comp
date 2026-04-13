@@ -1,0 +1,80 @@
+#version 460 core
+
+#define CELL_INDEX_BUFFER 4
+#define PARTICLE_INDEX_BUFFER 5
+
+#define PARTICLE_COUNT 512
+#define THREADS_PER_GROUP 256
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, binding = CELL_INDEX_BUFFER) readonly buffer CellIndexBuff { uint cellIndexBuff[]; };
+layout(std430, binding = PARTICLE_INDEX_BUFFER) readonly buffer ParticleIndexBuff { uint particleIndexBuff[]; };
+
+shared uint s_counts[PARTICLE_COUNT * 4];
+
+shared uint s_keys[512];
+shared uint s_vals[512];
+
+uniform uint totalParticleCount;
+uniform uint shift_key;
+uniform uint passCount;
+
+void
+main() {
+    uint globalThreadIndex = gl_GlobalInvocationID.x;
+    uint workGroupIndex = gl_WorkGroupID.x;
+    uint localThreadIndex = gl_LocalInvocationIndex;
+
+    if (globalThreadIndex + 1 >= totalParticleCount) return;
+
+    uint one_key = cellIndexBuff[localThreadIndex];
+    uint two_key = cellIndexBuff[256 + localThreadIndex];
+
+    uint one_val = particleIndexBuff[localThreadIndex];
+    uint two_val = particleIndexBuff[256 + localThreadIndex];
+    barrier();
+
+    uint d_one = (one_key >> shift_key) & 3;
+    uint d_two = (two_key >> shift_key) & 3;
+
+    // set mask for digit to 1
+    s_counts[d_one * PARTICLE_COUNT + localThreadIndex] = 1;
+    s_counts[d_two * PARTICLE_COUNT + localThreadIndex + 256] = 1;
+    barrier();
+
+    // sweep up phase
+
+    // pass count for 512 elements is log2(512) i.e. 9
+    for (int pass = 0; pass < passCount; ++pass) {
+        
+        // array index stride per pass
+        uint stride = 1u << pass; 
+        
+        // Maximum threads that can process the buffer for current pass
+        uint maxThreadsForCurrentPass = THREADS_PER_GROUP >> pass;
+        
+        if (localThreadIndex < maxThreadsForCurrentPass) {
+
+            uint digit_offset_zero  = 0 * PARTICLE_COUNT;   
+            uint digit_offset_one   = 1 * PARTICLE_COUNT;   
+            uint digit_offset_two   = 2 * PARTICLE_COUNT;   
+            uint digit_offset_three = 3 * PARTICLE_COUNT;   
+
+            uint s_index = (localThreadIndex + 1) * (2 * stride) - 1;
+
+            uint final_index_zero  = digit_offset_zero  + s_index;
+            uint final_index_one   = digit_offset_one   + s_index;
+            uint final_index_two   = digit_offset_two   + s_index;
+            uint final_index_three = digit_offset_three + s_index;
+        }
+        barrier();
+    }
+
+    // reset root values
+    if (localThreadIndex == 0) {
+        for(uint digit = 0; digit < 4; ++digit) {
+            s_counts[digit * PARTICLE_COUNT + THREADS_PER_GROUP] = 0;
+        }
+    }
+}

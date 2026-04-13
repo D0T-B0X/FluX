@@ -11,10 +11,12 @@ Physics::Physics(Scene& activeScene)
     pressureShader.load(PRESSURE_CSHADER_PATH);
     forceShader.load(FORCE_CSHADER_PATH);
     gridHashShader.load(GRID_CELL_CSHADER_PATH);
+    orderCheckShader.load(ORDER_CHECK_CSHADER_PATH);
     countBufferShader.load(COUNT_CSHADER_PATH);
     localScanShader.load(LOCAL_SCAN_CSHADER_PATH);
     blockSumScanShader.load(BLOCK_SUM_SCAN_CSHADER_PATH);
     combineShader.load(COMBINE_CSHADER_PATH);
+    scatterShader.load(SCATTER_CSHADER_PATH);
 }
 
 void 
@@ -94,6 +96,13 @@ Physics::setForceUniforms() {
 }
 
 void
+Physics::setOrderCheckUniforms() {
+    orderCheckShader.use();
+
+    orderCheckShader.setInt("totalParticleCount", physicsScene.particleCount);
+}
+
+void
 Physics::setLocalScanUniforms() {
     localScanShader.use();
 
@@ -113,6 +122,13 @@ Physics::setCombineUniforms() {
     combineShader.use();
 
     combineShader.setInt("workGroupCount", workgroupCount);
+}
+
+void
+Physics::setScatterUniforms() {
+    scatterShader.use();
+
+
 }
 
 void 
@@ -177,29 +193,41 @@ Physics::initSSBOs() {
     physicsScene.cell_indexSSBO.bufferBindBase = 4;
     setupSSBO(physicsScene.cell_indexSSBO);   
 
+    // -------- Particle Index buffer --------
+    physicsScene.particle_indexSSBO.bufferDataSize = physicsScene.getParticleCountSize();
+    physicsScene.particle_indexSSBO.bufferData = 0;  // empty buffer
+    physicsScene.particle_indexSSBO.bufferBindBase = 5;
+    setupSSBO(physicsScene.particle_indexSSBO);   
+
     // -------- Count sort buffer --------
     physicsScene.count_buffSSBO.bufferDataSize = getCountBufferDataSize();
     physicsScene.count_buffSSBO.bufferData = 0;  // empty buffer
-    physicsScene.count_buffSSBO.bufferBindBase = 5;
+    physicsScene.count_buffSSBO.bufferBindBase = 6;
     setupSSBO(physicsScene.count_buffSSBO);   
 
     // -------- Local Scan Block sum buffer --------
     physicsScene.blockSum_buffSSBO.bufferDataSize = sizeof(uint) * ceil(workgroupCount / THREADS_PER_GROUP) * 4;
     physicsScene.blockSum_buffSSBO.bufferData = 0;  // empty buffer
-    physicsScene.blockSum_buffSSBO.bufferBindBase = 6;
+    physicsScene.blockSum_buffSSBO.bufferBindBase = 7;
     setupSSBO(physicsScene.blockSum_buffSSBO);   
 
     // -------- Local prefix sum offset buffer --------
     physicsScene.localSum_buffSSBO.bufferDataSize = getCountBufferDataSize();
     physicsScene.localSum_buffSSBO.bufferData = 0;  // empty buffer
-    physicsScene.localSum_buffSSBO.bufferBindBase = 7;
+    physicsScene.localSum_buffSSBO.bufferBindBase = 8;
     setupSSBO(physicsScene.localSum_buffSSBO);   
 
     // -------- Global Offset buffer --------
     physicsScene.offset_buffSSBO.bufferDataSize = getCountBufferDataSize();
     physicsScene.offset_buffSSBO.bufferData = 0;  // empty buffer
-    physicsScene.offset_buffSSBO.bufferBindBase = 8;
+    physicsScene.offset_buffSSBO.bufferBindBase = 9;
     setupSSBO(physicsScene.offset_buffSSBO);   
+
+    // -------- Final Cell Index buffer --------
+    physicsScene.finalCellIndex_buffSSBO.bufferDataSize = physicsScene.getParticleCountSize();
+    physicsScene.finalCellIndex_buffSSBO.bufferData = 0;  // empty buffer
+    physicsScene.finalCellIndex_buffSSBO.bufferBindBase = 10;
+    setupSSBO(physicsScene.finalCellIndex_buffSSBO);   
 }
 
 void 
@@ -211,30 +239,78 @@ Physics::buildGrid() {
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 
     // Radix sort of hashed cell indices
-    // pass the new shift key after each pass
+    /*
+     4 way radix sort processes 2 bits at once.
+     This halves the number of passes needed to sort the entire buffer,
+     thus we increment the shift key by 2 per pass.
+    */
     for (int shift_key = 0; shift_key < 32; shift_key += 2) {
+
+        // Phase 1: Order checking to ensure an early exit if all particles are already sorted
+
+        // reset the flag to zero before computation
+        GLuint zero = 0;
+        glNamedBufferSubData(
+            physicsScene.abortFlag_buffSSBO.bufferID, 
+            0, 
+            sizeof(GLuint), 
+            &zero
+        );
+        
+        // begin order check
+        orderCheckShader.use();
+
+        glDispatchCompute(workgroupCount, 1, 1);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+        // extract the value of abort flag
+        GLuint abortFlagResult = 0;
+        glGetNamedBufferSubData(
+            physicsScene.abortFlag_buffSSBO.bufferID, 
+            0, 
+            sizeof(GLuint), 
+            &abortFlagResult
+        );
+
+        // if the buffer is sorted no need to continue
+        if (abortFlagResult == 0) break;
+        
+        // Phase 1: Digit count histogram for particles per workgroup
         countBufferShader.use();
         countBufferShader.setInt("shift_key", shift_key);
 
         glDispatchCompute(workgroupCount, 1, 1);
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-        // TODO => Remove magic numbers
+        // Phase 2: Prefix Sum Scan
+
+        //     Phase 2.1: Local Scan
         localScanShader.use();
         localScanShader.setInt("passCount", getScanPassCount(workgroupCount));
 
         unsigned int localScanDispatchSize = (unsigned int)ceil((float)workgroupCount / (float)THREADS_PER_GROUP);
         glDispatchCompute(localScanDispatchSize, 1, 1);
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
+        //     Phase 2.2: Block Sum Scan
+        /*
+         It is set to use a single workgroup which restricts the maximum sorting
+         range to 16,777,216 particles (256 ^ 3)
+        */
         blockSumScanShader.use();
         blockSumScanShader.setInt("passCount", getScanPassCount(localScanDispatchSize));
         glDispatchCompute(1, 1, 1);
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
+        //     Phase 2.3: Combine Local Prefix Scans
         combineShader.use();
         glDispatchCompute(localScanDispatchSize, 1, 1);
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    
+        // Phase 3: Scatter cell indices using the prefix sum
+        scatterShader.use();
+        glDispatchCompute(workgroupCount, 1, 1);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
     }
 }
 
