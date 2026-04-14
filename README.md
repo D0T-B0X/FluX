@@ -6,7 +6,7 @@ FluX is a GPU-based fluid simulation prototype written in C++ and OpenGL 4.6. It
 
 - Modern OpenGL 4.6 pipeline using GLFW and GLAD
 - Compute-shader simulation passes for density, pressure, and force/integration
-- Uniform-grid cell hashing and radix-sort prefix-scan stages
+- Uniform-grid cell hashing and radix-sort stages (order check + 4-way prefix scan)
 - Instanced rendering of particle spheres
 - Fixed-step simulation and rendering loops
 - Free-fly camera controls for scene inspection
@@ -26,10 +26,11 @@ At startup, the app generates an initial particle block inside a bounded volume 
 Each physics update executes the following high-level flow:
 
 1. Grid build pass
-2. Radix-sort support passes (count, local scan, block-sum scan, combine)
-3. SPH density pass
-4. SPH pressure pass
-5. SPH force/integration pass
+2. Radix order-check pass (early-exit test)
+3. Radix 4-way prefix-scan + in-block shuffle pass (2 bits per pass)
+4. SPH density pass
+5. SPH pressure pass
+6. SPH force/integration pass
 
 Particle attributes are stored in SSBOs:
 
@@ -38,7 +39,9 @@ Particle attributes are stored in SSBOs:
 - force_pressure
 - color_padding
 - cell_index
-- count/block/local/offset buffers for sort support
+- particle_index
+- abort_flag
+- global_offset
 
 Pressure uses a Tait-style equation of state.
 
@@ -92,11 +95,13 @@ Implemented:
 - SPH density/pressure/force passes
 - Particle floor collision response
 - Cell hash generation
-- Radix-sort support stage wiring
+- Radix order checking
+- Radix 4-way prefix scan with local in-block reordering
 - Instanced sphere rendering
 
 In progress or partial:
 
+- Cross-workgroup radix positioning/merge validation for large particle counts
 - End-to-end sorted-neighbor usage in SPH kernels
 - Surface rendering path
 - Event-driven runtime parameter updates
@@ -104,6 +109,7 @@ In progress or partial:
 ## Limitations
 
 - SPH compute shaders currently perform full particle-pair loops, which are expensive at larger particle counts.
+- In a partially filled last radix workgroup, invalid lanes must be masked out of the counting mask; otherwise digit counts are inflated.
 - Event handling scaffolding exists but is not yet integrated as a complete runtime system.
 - Surface generation and rendering are present as scaffolding and are not part of the active rendering flow.
 
@@ -137,10 +143,8 @@ FluX/
     SpatialHashing/
       hash_grid_cell_index.comp
       RadixSort/
-        count.comp
-        local_scan.comp
-        block_sum_scan.comp
-        combine.comp
+        order_check.comp
+        prefix_scan.comp
     Render/
       vSphere.glsl
       fSphere.glsl
