@@ -12,11 +12,7 @@ Physics::Physics(Scene& activeScene)
     forceShader.load(FORCE_CSHADER_PATH);
     gridHashShader.load(GRID_CELL_CSHADER_PATH);
     orderCheckShader.load(ORDER_CHECK_CSHADER_PATH);
-    countBufferShader.load(COUNT_CSHADER_PATH);
-    localScanShader.load(LOCAL_SCAN_CSHADER_PATH);
-    blockSumScanShader.load(BLOCK_SUM_SCAN_CSHADER_PATH);
-    combineShader.load(COMBINE_CSHADER_PATH);
-    scatterShader.load(SCATTER_CSHADER_PATH);
+    prefixScanShader.load(LOCAL_PREFIX_SCAN_CSHADER_PATH);
 }
 
 void 
@@ -34,13 +30,6 @@ Physics::setGridUniforms() {
     gridHashShader.setFloat("cell_size", 1.1 * SMOOTHING_RADIUS); // slighly larger cell size to collect all particles
     gridHashShader.setInt("gridSize", GRID_SIDE);
     gridHashShader.setVec3("gridMin", glm::vec3(MIN_BOUND, MIN_BOUND, MIN_BOUND));
-}
-
-void
-Physics::setCountSortUniforms() {
-    countBufferShader.use();
-
-    countBufferShader.setInt("numParticles", physicsScene.particleCount);
 }
 
 void 
@@ -103,32 +92,14 @@ Physics::setOrderCheckUniforms() {
 }
 
 void
-Physics::setLocalScanUniforms() {
-    localScanShader.use();
+Physics::setPrefixScanUniforms() {
+    prefixScanShader.use();
 
-    // 4 way radix sort 
-    localScanShader.setInt("workGroupCount", workgroupCount);
-}
+    prefixScanShader.setInt("totalParticleCount", physicsScene.particleCount);
+    prefixScanShader.setInt("workGroupCount", workgroupCount);
 
-void
-Physics::setBlockSumScanUniforms() {
-    blockSumScanShader.use();
-
-    blockSumScanShader.setInt("blockSumSize", ceil((float)workgroupCount / (float)THREADS_PER_GROUP) * 4);
-}
-
-void
-Physics::setCombineUniforms() {
-    combineShader.use();
-
-    combineShader.setInt("workGroupCount", workgroupCount);
-}
-
-void
-Physics::setScatterUniforms() {
-    scatterShader.use();
-
-
+    unsigned int PARTICLES_PROCESSED_PER_WORKGROUP = THREADS_PER_GROUP * 2;
+    prefixScanShader.setInt("passCount", getScanPassCount(PARTICLES_PROCESSED_PER_WORKGROUP));
 }
 
 void 
@@ -199,35 +170,17 @@ Physics::initSSBOs() {
     physicsScene.particle_indexSSBO.bufferBindBase = 5;
     setupSSBO(physicsScene.particle_indexSSBO);   
 
-    // -------- Count sort buffer --------
-    physicsScene.count_buffSSBO.bufferDataSize = getCountBufferDataSize();
-    physicsScene.count_buffSSBO.bufferData = 0;  // empty buffer
-    physicsScene.count_buffSSBO.bufferBindBase = 6;
-    setupSSBO(physicsScene.count_buffSSBO);   
-
-    // -------- Local Scan Block sum buffer --------
-    physicsScene.blockSum_buffSSBO.bufferDataSize = sizeof(uint) * ceil(workgroupCount / THREADS_PER_GROUP) * 4;
-    physicsScene.blockSum_buffSSBO.bufferData = 0;  // empty buffer
-    physicsScene.blockSum_buffSSBO.bufferBindBase = 7;
-    setupSSBO(physicsScene.blockSum_buffSSBO);   
-
-    // -------- Local prefix sum offset buffer --------
-    physicsScene.localSum_buffSSBO.bufferDataSize = getCountBufferDataSize();
-    physicsScene.localSum_buffSSBO.bufferData = 0;  // empty buffer
-    physicsScene.localSum_buffSSBO.bufferBindBase = 8;
-    setupSSBO(physicsScene.localSum_buffSSBO);   
+    // -------- Abort Flag buffer --------
+    physicsScene.abortFlag_buffSSBO.bufferDataSize = sizeof(uint);
+    physicsScene.abortFlag_buffSSBO.bufferData = 0;
+    physicsScene.abortFlag_buffSSBO.bufferBindBase = 6;
+    setupSSBO(physicsScene.abortFlag_buffSSBO);
 
     // -------- Global Offset buffer --------
-    physicsScene.offset_buffSSBO.bufferDataSize = getCountBufferDataSize();
-    physicsScene.offset_buffSSBO.bufferData = 0;  // empty buffer
-    physicsScene.offset_buffSSBO.bufferBindBase = 9;
-    setupSSBO(physicsScene.offset_buffSSBO);   
-
-    // -------- Final Cell Index buffer --------
-    physicsScene.finalCellIndex_buffSSBO.bufferDataSize = physicsScene.getParticleCountSize();
-    physicsScene.finalCellIndex_buffSSBO.bufferData = 0;  // empty buffer
-    physicsScene.finalCellIndex_buffSSBO.bufferBindBase = 10;
-    setupSSBO(physicsScene.finalCellIndex_buffSSBO);   
+    physicsScene.gloablOffset_buffSSBO.bufferDataSize = sizeof(uint) * (workgroupCount * 4);
+    physicsScene.gloablOffset_buffSSBO.bufferData = 0;
+    physicsScene.gloablOffset_buffSSBO.bufferBindBase = 7;
+    setupSSBO(physicsScene.gloablOffset_buffSSBO);
 }
 
 void 
@@ -274,41 +227,10 @@ Physics::buildGrid() {
 
         // if the buffer is sorted no need to continue
         if (abortFlagResult == 0) break;
-        
-        // Phase 1: Digit count histogram for particles per workgroup
-        countBufferShader.use();
-        countBufferShader.setInt("shift_key", shift_key);
 
-        glDispatchCompute(workgroupCount, 1, 1);
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+        prefixScanShader.use();
+        prefixScanShader.setInt("shift_key", shift_key);
 
-        // Phase 2: Prefix Sum Scan
-
-        //     Phase 2.1: Local Scan
-        localScanShader.use();
-        localScanShader.setInt("passCount", getScanPassCount(workgroupCount));
-
-        unsigned int localScanDispatchSize = (unsigned int)ceil((float)workgroupCount / (float)THREADS_PER_GROUP);
-        glDispatchCompute(localScanDispatchSize, 1, 1);
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-        //     Phase 2.2: Block Sum Scan
-        /*
-         It is set to use a single workgroup which restricts the maximum sorting
-         range to 16,777,216 particles (256 ^ 3)
-        */
-        blockSumScanShader.use();
-        blockSumScanShader.setInt("passCount", getScanPassCount(localScanDispatchSize));
-        glDispatchCompute(1, 1, 1);
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-        //     Phase 2.3: Combine Local Prefix Scans
-        combineShader.use();
-        glDispatchCompute(localScanDispatchSize, 1, 1);
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-    
-        // Phase 3: Scatter cell indices using the prefix sum
-        scatterShader.use();
         glDispatchCompute(workgroupCount, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
     }
@@ -318,7 +240,9 @@ void
 Physics::setWorkGroupCount() {
     // Lacks proper error handling :/
     if (physicsScene.particleCount < 1) { workgroupCount = 1; return; }
-    workgroupCount = ceil((float)physicsScene.particleCount / (float)THREADS_PER_GROUP);
+
+    unsigned int PARTCILES_PROCESSED_PER_WORKGROUP = THREADS_PER_GROUP * 2;
+    workgroupCount = ceil((float)physicsScene.particleCount / (float)PARTCILES_PROCESSED_PER_WORKGROUP);
 }
 
 void
