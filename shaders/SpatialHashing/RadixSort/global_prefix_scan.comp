@@ -1,0 +1,59 @@
+#version 460 core
+
+#define CELL_INDEX_BUFFER 4
+#define PARTICLE_INDEX_BUFFER 5
+#define GLOBAL_OFFSET_BUFFER 7
+
+#define PARTICLE_COUNT 512
+#define THREADS_PER_GROUP 256
+#define MAX_WORKGROUPS_PROCESSED 1024
+#define SHARED_OFFSET_ARRAY_SIZE (MAX_WORKGROUPS_PROCESSED * 4)
+
+#define NUM_BANKS 32
+#define LOG_NUM_BANKS 5
+
+#define CONFLICT_FREE_OFFSET(n) ((n) >> LOG_NUM_BANKS) 
+
+layout(local_size_x = THREADS_PER_GROUP, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, binding = GLOBAL_OFFSET_BUFFER) buffer GlobalOffsetBuff { uint globalOffsetBuff[]; };
+
+shared uint shared_offset_array[SHARED_OFFSET_ARRAY_SIZE + 128];
+
+uniform uint workGroupCount;
+
+void
+main() {
+    uint globalThreadIndex = gl_GlobalInvocationID.x;
+    uint workGroupIndex = gl_WorkGroupID.x;
+    uint localThreadIndex = gl_LocalInvocationIndex;
+
+    shared_offset_array[globalThreadIndex] = 0xFFFFFFFFu;
+
+    if (globalThreadIndex < (workGroupCount * 4)) {
+        uint conflict_free_shared_array_index = CONFLICT_FREE_OFFSET(globalThreadIndex) + globalThreadIndex;
+        shared_offset_array[conflict_free_shared_array_index] = globalOffsetBuff[globalThreadIndex];
+    }
+
+    uint elements_per_workgroup = MAX_WORKGROUPS_PROCESSED / THREADS_PER_GROUP;
+    uint passCount = uint(log2(float(workGroupCount * 4)));
+    for(uint element_offset = 0; element_offset < elements_per_workgroup; ++element_offset) {
+
+        for(uint pass = 0; pass < passCount; ++pass) {
+            uint stride = 1u << pass;
+
+            uint maxThreadsForCurrentPass = THREADS_PER_GROUP >> pass;
+            if(globalThreadIndex < maxThreadsForCurrentPass) {
+                uint right_index = (globalThreadIndex + 1) * (2 * stride) - 1;
+                uint left_index = right_index - stride;
+
+                uint conflict_free_right_index = CONFLICT_FREE_OFFSET(right_index) + right_index;
+                uint conflict_free_left_index = CONFLICT_FREE_OFFSET(left_index) + left_index;
+
+                shared_offset_array[conflict_free_right_index] 
+                        += shared_offset_array[conflict_free_left_index];
+            }
+            barrier();
+        }
+    }
+}

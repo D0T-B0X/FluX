@@ -25,7 +25,7 @@ layout(std430, binding = GLOBAL_OFFSET_BUFFER) buffer GlobalOffsetBuff { uint gl
 
 // 64 uints for padding to avoid bank conflict
 shared uint s_counts[PARTICLE_COUNT * 4 + 64];
-shared uint s_offsets[4];
+shared uint local_offsets[4];
 
 shared uint s_keys[THREADS_PER_GROUP * 2];
 shared uint s_vals[THREADS_PER_GROUP * 2];
@@ -87,13 +87,15 @@ main() {
 
     uint global_index_one = workGroupIndex * PARTICLE_COUNT + localThreadIndex;
     uint global_index_two = global_index_one + THREADS_PER_GROUP;
+    bool is_valid_one = global_index_one < totalParticleCount;
+    bool is_valid_two = global_index_two < totalParticleCount;
 
-    if (global_index_one < totalParticleCount) {
+    if (is_valid_one) {
         one_key = cellIndexBuff[global_index_one];
         one_val = particleIndexBuff[global_index_one];
     }
 
-    if (global_index_two < totalParticleCount) {
+    if (is_valid_two) {
         two_key = cellIndexBuff[global_index_two];
         two_val = particleIndexBuff[global_index_two];
     }
@@ -105,17 +107,27 @@ main() {
     s_vals[localThreadIndex] = one_val;
     s_vals[localThreadIndex + THREADS_PER_GROUP] = two_val;
 
-    uint d_one = (one_key >> shift_key) & 3;
-    uint d_two = (two_key >> shift_key) & 3;
+    uint d_one = 0u;
+    uint d_two = 0u;
+    if (is_valid_one) d_one = (one_key >> shift_key) & 3u;
+    if (is_valid_two) d_two = (two_key >> shift_key) & 3u;
 
-    // set mask for digit to 1
+    // set mask for digit to 1 in valid lanes only
     uint mask_index_first_256 = d_one * PARTICLE_COUNT + localThreadIndex;
     uint mask_index_second_256 = d_two * PARTICLE_COUNT + localThreadIndex + THREADS_PER_GROUP;
-    s_counts[CONFLICT_FREE_OFFSET(mask_index_first_256) + mask_index_first_256] = 1;
-    s_counts[CONFLICT_FREE_OFFSET(mask_index_second_256) + mask_index_second_256] = 1;
+    if (is_valid_one) {
+        s_counts[CONFLICT_FREE_OFFSET(mask_index_first_256) + mask_index_first_256] = 1;
+    }
+    if (is_valid_two) {
+        s_counts[CONFLICT_FREE_OFFSET(mask_index_second_256) + mask_index_second_256] = 1;
+    }
     barrier();
 
-    // sweep up phase
+    /*
+     *************************************
+     *********** SWEEP UP PHASE***********
+     *************************************
+    */
 
     // pass count for 512 elements is log2(512) i.e. 9
     for (int pass = 0; pass < passCount; ++pass) {
@@ -168,23 +180,27 @@ main() {
         uint root_index  = digit * PARTICLE_COUNT + PARTICLE_COUNT - 1u; 
         uint conflict_free_root_index  = CONFLICT_FREE_OFFSET(root_index) + root_index;
 
-        s_offsets[localThreadIndex] = s_counts[conflict_free_root_index];
-        uint globalOffsetBuffer_workgroup_base = workGroupIndex * 4u;
-        globalOffsetBuff[globalOffsetBuffer_workgroup_base + digit] = s_counts[conflict_free_root_index]; 
+        local_offsets[digit] = s_counts[conflict_free_root_index];
+        uint globalOffsetBuffer_index = (digit * workGroupCount) + workGroupIndex;
+        globalOffsetBuff[globalOffsetBuffer_index] = s_counts[conflict_free_root_index]; 
 
         s_counts[conflict_free_root_index] = 0u;
     }
     barrier();
 
     if (localThreadIndex == 0) {
-        s_offsets[3] = s_offsets[2] + s_offsets[1] + s_offsets[0];
-        s_offsets[2] = s_offsets[1] + s_offsets[0];
-        s_offsets[1] = s_offsets[0];
-        s_offsets[0] = 0;
+        local_offsets[3] = local_offsets[2] + local_offsets[1] + local_offsets[0];
+        local_offsets[2] = local_offsets[1] + local_offsets[0];
+        local_offsets[1] = local_offsets[0];
+        local_offsets[0] = 0;
     }
     barrier();
 
-    // downsweep phase
+    /*
+     ***************************************
+     *********** DOWN SWEEP PHASE***********
+     ***************************************
+    */
 
     for(uint pass = 0u; pass < passCount; ++pass) {
         uint stride = 1u << (passCount - pass - 1u);
@@ -250,35 +266,35 @@ main() {
 
     // First element of the thread
     if (global_index_one < totalParticleCount) {
-        uint offset = s_offsets[d_one];
+        uint offset = local_offsets[d_one];
         uint prefixSumIndex = d_one * PARTICLE_COUNT + localThreadIndex;
         uint prefixSum = s_counts[CONFLICT_FREE_OFFSET(prefixSumIndex) + prefixSumIndex];
         uint final_dest = offset + prefixSum;
 
-        s_keys_shuffled[final_dest] = s_keys[localThreadIndex];
-        s_vals_shuffled[final_dest] = s_vals[localThreadIndex];
+        s_keys_shuffled[final_dest] = one_key;
+        s_vals_shuffled[final_dest] = one_val;
     }
     
     // Second element of the thread
     if (global_index_two < totalParticleCount) {
-        uint offset = s_offsets[d_two];
+        uint offset = local_offsets[d_two];
         uint prefixSumIndex = d_two * PARTICLE_COUNT + localThreadIndex + THREADS_PER_GROUP;
         uint prefixSum = s_counts[CONFLICT_FREE_OFFSET(prefixSumIndex) + prefixSumIndex];
         uint final_dest = offset + prefixSum;
 
-        s_keys_shuffled[final_dest] = s_keys[localThreadIndex + THREADS_PER_GROUP];
-        s_vals_shuffled[final_dest] = s_vals[localThreadIndex + THREADS_PER_GROUP];
+        s_keys_shuffled[final_dest] = two_key;
+        s_vals_shuffled[final_dest] = two_val;
     }
     barrier();
 
     // write back sorted values
     if (global_index_one < totalParticleCount) {
-        cellIndexBuff[workGroupIndex * PARTICLE_COUNT + localThreadIndex] = s_keys_shuffled[localThreadIndex];
-        particleIndexBuff[workGroupIndex * PARTICLE_COUNT + localThreadIndex] = s_vals_shuffled[localThreadIndex];
+        cellIndexBuff[global_index_one] = s_keys_shuffled[localThreadIndex];
+        particleIndexBuff[global_index_one] = s_vals_shuffled[localThreadIndex];
     }
 
     if (global_index_two < totalParticleCount) {
-        cellIndexBuff[workGroupIndex * PARTICLE_COUNT + localThreadIndex + THREADS_PER_GROUP] = s_keys_shuffled[localThreadIndex + THREADS_PER_GROUP];
-        particleIndexBuff[workGroupIndex * PARTICLE_COUNT + localThreadIndex + THREADS_PER_GROUP] = s_vals_shuffled[localThreadIndex + THREADS_PER_GROUP];
+        cellIndexBuff[global_index_two] = s_keys_shuffled[localThreadIndex + THREADS_PER_GROUP];
+        particleIndexBuff[global_index_two] = s_vals_shuffled[localThreadIndex + THREADS_PER_GROUP];
     }
 }

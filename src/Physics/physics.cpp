@@ -27,7 +27,8 @@ Physics::setGridUniforms() {
     gridHashShader.use();
 
     gridHashShader.setInt("numParticles", physicsScene.getParticleCount());
-    gridHashShader.setFloat("cell_size", 1.1 * SMOOTHING_RADIUS); // slighly larger cell size to collect all particles
+    // slighly larger cell size to collect all particles
+    gridHashShader.setFloat("cell_size", 1.1 * SMOOTHING_RADIUS); 
     gridHashShader.setInt("gridSize", GRID_SIDE);
     gridHashShader.setVec3("gridMin", glm::vec3(MIN_BOUND, MIN_BOUND, MIN_BOUND));
 }
@@ -195,7 +196,8 @@ Physics::buildGrid() {
     /*
      4 way radix sort processes 2 bits at once.
      This halves the number of passes needed to sort the entire buffer,
-     thus we increment the shift key by 2 per pass.
+     thus we increment the shift key by 2 per pass. 
+     32 bits number i.e 16 passes
     */
     for (int shift_key = 0; shift_key < 32; shift_key += 2) {
 
@@ -251,12 +253,12 @@ Physics::computeSPHUpdates() {
     // Density calculations pass
     densityShader.use();
     glDispatchCompute(workgroupCount, 1, 1);
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     // Pressure calculations pass
     pressureShader.use();
     glDispatchCompute(workgroupCount, 1, 1);
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     // Pressure force calculations pass
     forceShader.use();
