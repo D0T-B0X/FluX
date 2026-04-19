@@ -105,14 +105,12 @@ App::setup() {
 
     // Physics setup
     pEngine.setGridUniforms();
-    pEngine.setCountSortUniforms();
     pEngine.setDensityUniforms();
     pEngine.setPressureUniforms();
     pEngine.setForceUniforms();
     pEngine.setWorkGroupCount();    
-    pEngine.setLocalScanUniforms();
-    pEngine.setBlockSumScanUniforms();
-    pEngine.setCombineUniforms();
+    pEngine.setOrderCheckUniforms();
+    pEngine.setPrefixScanUniforms();
     pEngine.initSSBOs();
 
     // Render setup

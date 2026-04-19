@@ -1,59 +1,133 @@
 #version 460 core
 
-#define CELL_INDEX_BUFFER 4
-#define PARTICLE_INDEX_BUFFER 5
 #define GLOBAL_OFFSET_BUFFER 7
 
 #define PARTICLE_COUNT 512
 #define THREADS_PER_GROUP 256
 #define MAX_WORKGROUPS_PROCESSED 1024
-#define SHARED_OFFSET_ARRAY_SIZE (MAX_WORKGROUPS_PROCESSED * 4)
+#define SHARED_OFFSET_ARRAY_SIZE (MAX_WORKGROUPS_PROCESSED * 4) // 1204 * 4 = 4096
 
 #define NUM_BANKS 32
 #define LOG_NUM_BANKS 5
 
-#define CONFLICT_FREE_OFFSET(n) ((n) >> LOG_NUM_BANKS) 
+#define CONFLICT_FREE_OFFSET(n) ((n) >> LOG_NUM_BANKS)
+#define CONFLICT_FREE_INDEX(n) (CONFLICT_FREE_OFFSET(n) + n)
 
 layout(local_size_x = THREADS_PER_GROUP, local_size_y = 1, local_size_z = 1) in;
 
 layout(std430, binding = GLOBAL_OFFSET_BUFFER) buffer GlobalOffsetBuff { uint globalOffsetBuff[]; };
 
+// padding of <Array Size> / NUM_BANKS to accomodate
+// offset shifts that prevent bank conflicts
 shared uint shared_offset_array[SHARED_OFFSET_ARRAY_SIZE + 128];
+shared uint shared_block_sums[THREADS_PER_GROUP + 8];
 
-uniform uint workGroupCount;
+uniform uint elementsProcessedPerThread;
+// count of logical threads processed by the workgroup
+uniform uint effectiveThreadCount;
 
 void
 main() {
-    uint globalThreadIndex = gl_GlobalInvocationID.x;
     uint workGroupIndex = gl_WorkGroupID.x;
     uint localThreadIndex = gl_LocalInvocationIndex;
+    uint conflictFreeLocalIndex = CONFLICT_FREE_INDEX(localThreadIndex);
 
-    shared_offset_array[globalThreadIndex] = 0xFFFFFFFFu;
+    for(uint thread = 0; thread < elementsProcessedPerThread; ++thread) {
+        uint index = localThreadIndex + (thread * THREADS_PER_GROUP);
+        uint conflictFreeIndex = CONFLICT_FREE_INDEX(index);
 
-    if (globalThreadIndex < (workGroupCount * 4)) {
-        uint conflict_free_shared_array_index = CONFLICT_FREE_OFFSET(globalThreadIndex) + globalThreadIndex;
-        shared_offset_array[conflict_free_shared_array_index] = globalOffsetBuff[globalThreadIndex];
+        shared_offset_array[conflictFreeIndex] = 0u;
+    }
+    barrier();
+
+    shared_block_sums[conflictFreeLocalIndex] = 0u;
+    barrier();
+
+    // Fill shared memory array with global offsets
+    for(uint thread = 0; thread < elementsProcessedPerThread; ++thread) {
+        uint index = localThreadIndex + (thread * THREADS_PER_GROUP);
+        uint conflictFreeIndex = CONFLICT_FREE_INDEX(index);
+
+        if (index < effectiveThreadCount) {
+            shared_offset_array[conflictFreeIndex] = globalOffsetBuff[index];
+        }
+    }
+    barrier();
+
+    // Add and store block sums in shared array
+    uint sum = 0u;
+    for(uint thread = 0; thread < elementsProcessedPerThread; ++thread) {
+        uint index = (localThreadIndex * elementsProcessedPerThread) + thread;
+        uint conflictFreeIndex = CONFLICT_FREE_INDEX(index);
+
+        uint temp = shared_offset_array[conflictFreeIndex];
+        shared_offset_array[conflictFreeIndex] = sum;
+        sum += temp;
+    }
+    shared_block_sums[conflictFreeLocalIndex] = sum;
+    barrier();
+
+    // up-sweep
+
+    uint passCount = uint(log2(float(THREADS_PER_GROUP)));
+    for(uint pass = 0; pass < passCount; ++pass) {
+        uint stride = 1u << pass;
+        uint maxThreadsForCurrentPass = (THREADS_PER_GROUP / 2) >> pass;
+
+        if (localThreadIndex < maxThreadsForCurrentPass) {
+            uint rightIndex = (localThreadIndex + 1) * (2 * stride) - 1;
+            uint leftIndex = rightIndex - stride;
+
+            uint conflictFreeRightIndex = CONFLICT_FREE_INDEX(rightIndex);
+            uint conflictFreeLeftIndex = CONFLICT_FREE_INDEX(leftIndex);
+
+            shared_block_sums[conflictFreeRightIndex] += shared_block_sums[conflictFreeLeftIndex];
+        }
+        barrier();
     }
 
-    uint elements_per_workgroup = MAX_WORKGROUPS_PROCESSED / THREADS_PER_GROUP;
-    uint passCount = uint(log2(float(workGroupCount * 4)));
-    for(uint element_offset = 0; element_offset < elements_per_workgroup; ++element_offset) {
+    // down sweep
 
-        for(uint pass = 0; pass < passCount; ++pass) {
-            uint stride = 1u << pass;
+    // set root to 0
+    if (localThreadIndex == 0) {
+        uint conflictFreeRootIndex = CONFLICT_FREE_INDEX(THREADS_PER_GROUP - 1u);
+        shared_block_sums[conflictFreeRootIndex] = 0u;
+    }
+    barrier();
 
-            uint maxThreadsForCurrentPass = THREADS_PER_GROUP >> pass;
-            if(globalThreadIndex < maxThreadsForCurrentPass) {
-                uint right_index = (globalThreadIndex + 1) * (2 * stride) - 1;
-                uint left_index = right_index - stride;
+    for(uint pass = 0; pass < passCount; ++pass) {
+        uint stride = 1u << (passCount - pass - 1);
+        uint maxThreadsForCurrentPass = (THREADS_PER_GROUP / 2) >> (passCount - pass - 1);
 
-                uint conflict_free_right_index = CONFLICT_FREE_OFFSET(right_index) + right_index;
-                uint conflict_free_left_index = CONFLICT_FREE_OFFSET(left_index) + left_index;
+        if (localThreadIndex < maxThreadsForCurrentPass) {
+            uint rightIndex = (localThreadIndex + 1) * (2 * stride) - 1;
+            uint leftIndex = rightIndex - stride;
 
-                shared_offset_array[conflict_free_right_index] 
-                        += shared_offset_array[conflict_free_left_index];
-            }
-            barrier();
+            uint conflictFreeRightIndex = CONFLICT_FREE_INDEX(rightIndex);
+            uint conflictFreeLeftIndex = CONFLICT_FREE_INDEX(leftIndex);
+
+            uint rightChild = shared_block_sums[conflictFreeRightIndex];
+            shared_block_sums[conflictFreeRightIndex] += shared_block_sums[conflictFreeLeftIndex];
+            shared_block_sums[conflictFreeLeftIndex] = rightChild;
+        }
+        barrier();
+    }
+
+    // store final global offsets in offset buffer
+    for(uint thread = 0; thread < elementsProcessedPerThread; ++thread) {
+        uint index = (localThreadIndex * elementsProcessedPerThread) + thread;
+        uint conflictFreeIndex = CONFLICT_FREE_INDEX(index);
+
+        shared_offset_array[conflictFreeIndex] += shared_block_sums[conflictFreeLocalIndex];
+    }
+    barrier();
+
+    for(uint thread = 0; thread < elementsProcessedPerThread; ++thread) {
+        uint index = localThreadIndex + (thread * THREADS_PER_GROUP);
+        uint conflictFreeIndex = CONFLICT_FREE_INDEX(index);
+        
+        if (index < effectiveThreadCount) {
+            globalOffsetBuff[index] = shared_offset_array[conflictFreeIndex];
         }
     }
 }
