@@ -3,74 +3,94 @@
 #define CELL_INDEX_BUFFER 4
 #define ABORT_FLAG_BUFFER 6
 
-#define GROUP_THREAD_COUNT 256
+#define THREADS_PER_GROUP 256
+#define PARTICLE_COUNT 512
 
-layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = THREADS_PER_GROUP, local_size_y = 1, local_size_z = 1) in;
 
 layout(std430, binding = CELL_INDEX_BUFFER) readonly buffer CellIndexBuff { uint cellIndexBuff[]; };
 layout(std430, binding = ABORT_FLAG_BUFFER) buffer AbortFlag { uint abortFlag; };
 
-shared uint local_indices_copy[GROUP_THREAD_COUNT];
-shared uint check_array[GROUP_THREAD_COUNT];
+shared uint local_indices_copy[PARTICLE_COUNT];
+shared uint check_array[PARTICLE_COUNT];
 
 uniform uint totalParticleCount;
 
 void
 main() {
-    /* 
-     if even a single workgroup is unsorted then 
-     all order checks are halted.
+    /** 
+     * If even a single workgroup is unsorted then 
+     * all order checks are halted.
      */
     if (abortFlag == 1) return;
 
-    uint globalIndex = gl_GlobalInvocationID.x;
-    uint localIndex = gl_LocalInvocationIndex;
+    uint workGroupIndex = gl_WorkGroupID.x;
+    uint localThreadIndex = gl_LocalInvocationIndex;
+
+    uint localElementIndex = localThreadIndex;
+    uint stridedLocalElementIndex = localElementIndex + THREADS_PER_GROUP;
+
+    uint globalElementIndex = workGroupIndex * PARTICLE_COUNT + localThreadIndex;
+    uint stridedGlobalElementIndex = globalElementIndex + THREADS_PER_GROUP;
+
+    local_indices_copy[localElementIndex] = 0xFFFFFFFFu;
+    local_indices_copy[stridedLocalElementIndex] = 0xFFFFFFFFu;
 
     // copy all index data to local buffers for faster re-reads
-    if (globalIndex < totalParticleCount) {
-        local_indices_copy[localIndex] = cellIndexBuff[globalIndex];
-    } else {
-        // pad extra memory to prevent out of bounds errors
-        local_indices_copy[localIndex] = 0xFFFFFFFFu; 
+    if (globalElementIndex < totalParticleCount) {
+        local_indices_copy[localElementIndex] = cellIndexBuff[globalElementIndex];
+    } 
+
+    if (stridedGlobalElementIndex < totalParticleCount) {
+        local_indices_copy[stridedLocalElementIndex] = cellIndexBuff[stridedGlobalElementIndex];
     }
     barrier();
 
     // initialize comparison array with 0
-    check_array[localIndex] = 0;
+    check_array[localElementIndex] = 0u;
+    check_array[stridedLocalElementIndex] = 0u;
     barrier();
 
     // set comparison mask to 1 if unsorted and 0 if sorted
-    if (globalIndex + 1 < totalParticleCount) {
-        if (localIndex == GROUP_THREAD_COUNT - 1) {
-            // compares current and next element
-            check_array[localIndex] = local_indices_copy[localIndex] <= cellIndexBuff[globalIndex + 1]
-                                      ?
-                                      0 : 1;
-        } else {
-        check_array[localIndex] = local_indices_copy[localIndex] <= local_indices_copy[localIndex + 1]
-                                  ? 
-                                  0 : 1;
-        }   
+    if (globalElementIndex + 1u < totalParticleCount) {
+        uint currentElement = local_indices_copy[localElementIndex];
+        uint nextElement = local_indices_copy[localElementIndex + 1u];
+        check_array[localElementIndex] = (currentElement <= nextElement) ? 0u : 1u;
     }
-    barrier();
 
-    /* 
-     perform a parallel reduction sum over the comparison 
-     results to ensure the total sum is 0
-     i.e all elements are sorted 
-    */ 
-    for(uint stride = GROUP_THREAD_COUNT / 2; stride > 0; stride >>= 1) {
-        if (localIndex < stride) {
-            check_array[localIndex] += check_array[localIndex + stride];
+    if (stridedGlobalElementIndex + 1u < totalParticleCount) {
+        uint currentElement = local_indices_copy[stridedLocalElementIndex];
+        uint nextElement;
+
+        // For the last element in the 512-wide block, read neighbor from global memory.
+        if (stridedLocalElementIndex == PARTICLE_COUNT - 1u) {
+            nextElement = cellIndexBuff[stridedGlobalElementIndex + 1u];
+        } else {
+            nextElement = local_indices_copy[stridedLocalElementIndex + 1u];
         }
 
+        check_array[stridedLocalElementIndex] = (currentElement <= nextElement) ? 0u : 1u;
+    }
+
+    barrier();
+
+    /**
+     * Perform a parallel reduction sum over the 
+     * comparison results to ensure the total sum is 0
+     * i.e all elements are sorted 
+     */ 
+    for(uint stride = PARTICLE_COUNT / 2; stride > 0; stride >>= 1) {
+        if (localElementIndex < stride) {
+            check_array[localElementIndex] += check_array[localElementIndex + stride];
+        }
         barrier();
     }
 
-    /* uploads the result of the order check
-     to a global abort flag which exits all threads early
-    */ 
-    if (localIndex == 0 && check_array[0] > 0) {
+    /** 
+     * Uploads the result of the order check
+     * to a global abort flag which exits all threads early
+     */ 
+    if (localThreadIndex == 0 && check_array[0] > 0) {
         atomicOr(abortFlag, 1);
     }
 }

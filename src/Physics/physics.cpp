@@ -13,12 +13,14 @@ Physics::Physics(Scene& activeScene)
     gridHashShader.load(GRID_CELL_CSHADER_PATH);
     orderCheckShader.load(ORDER_CHECK_CSHADER_PATH);
     prefixScanShader.load(LOCAL_PREFIX_SCAN_CSHADER_PATH);
+    globalOffsetSumShader.load(GLOBAL_OFFSET_SUM_CSHADER_PATH);
+    scatterShader.load(SCATTER_CSHADER_PATH);
 }
 
 void 
 Physics::updateFrame() {
 
-    buildGrid();
+    performSpatialHashAndSort();
     computeSPHUpdates();
 }
 
@@ -103,6 +105,23 @@ Physics::setPrefixScanUniforms() {
     prefixScanShader.setInt("passCount", getScanPassCount(PARTICLES_PROCESSED_PER_WORKGROUP));
 }
 
+void
+Physics::setGlobalOffsetSumUniforms() {
+    globalOffsetSumShader.use();
+
+    unsigned int elementsProcessedPerThread = ceil((float)workgroupCount / (float)THREADS_PER_GROUP);
+    globalOffsetSumShader.setInt("elementsProcessedPerThread", elementsProcessedPerThread);
+    globalOffsetSumShader.setInt("effectiveThreadCount", getEffectiveThreadCount(workgroupCount * 4));
+}
+
+void
+Physics::setScatterUniforms() {
+    scatterShader.use();
+    
+    scatterShader.setInt("totalParticleCount", physicsScene.particleCount);
+    scatterShader.setInt("workGroupCount", workgroupCount);
+}
+
 void 
 Physics::cleanup() {
     
@@ -159,49 +178,89 @@ Physics::initSSBOs() {
     physicsScene.color_paddingSSBO.bufferBindBase = 3;
     setupSSBO(physicsScene.color_paddingSSBO);
 
-    // -------- Cell Index buffer --------
-    physicsScene.cell_indexSSBO.bufferDataSize = physicsScene.getParticleCountSize();
-    physicsScene.cell_indexSSBO.bufferData = 0;  // empty buffer
-    physicsScene.cell_indexSSBO.bufferBindBase = 4;
-    setupSSBO(physicsScene.cell_indexSSBO);   
+    // -------- First Cell Index buffer --------
+    physicsScene.cell_index_oneSSBO.bufferDataSize = physicsScene.getParticleCountSize();
+    physicsScene.cell_index_oneSSBO.bufferData = 0;  // empty buffer
+    physicsScene.cell_index_oneSSBO.bufferBindBase = 4;
+    setupSSBO(physicsScene.cell_index_oneSSBO);   
 
-    // -------- Particle Index buffer --------
-    physicsScene.particle_indexSSBO.bufferDataSize = physicsScene.getParticleCountSize();
-    physicsScene.particle_indexSSBO.bufferData = 0;  // empty buffer
-    physicsScene.particle_indexSSBO.bufferBindBase = 5;
-    setupSSBO(physicsScene.particle_indexSSBO);   
+    // -------- First Particle Index buffer --------
+    physicsScene.particle_index_oneSSBO.bufferDataSize = physicsScene.getParticleCountSize();
+    physicsScene.particle_index_oneSSBO.bufferData = 0;  // empty buffer
+    physicsScene.particle_index_oneSSBO.bufferBindBase = 5;
+    setupSSBO(physicsScene.particle_index_oneSSBO);   
 
     // -------- Abort Flag buffer --------
-    physicsScene.abortFlag_buffSSBO.bufferDataSize = sizeof(uint);
+    physicsScene.abortFlag_buffSSBO.bufferDataSize = sizeof(unsigned int); // a single unsigned integer to hold the flag value
     physicsScene.abortFlag_buffSSBO.bufferData = 0;
     physicsScene.abortFlag_buffSSBO.bufferBindBase = 6;
     setupSSBO(physicsScene.abortFlag_buffSSBO);
 
     // -------- Global Offset buffer --------
-    physicsScene.gloablOffset_buffSSBO.bufferDataSize = sizeof(uint) * (workgroupCount * 4);
+    physicsScene.gloablOffset_buffSSBO.bufferDataSize = sizeof(unsigned int) * (workgroupCount * 4);
     physicsScene.gloablOffset_buffSSBO.bufferData = 0;
     physicsScene.gloablOffset_buffSSBO.bufferBindBase = 7;
     setupSSBO(physicsScene.gloablOffset_buffSSBO);
+
+    // -------- Global Offset buffer --------
+    physicsScene.blockSum_buffSSBO.bufferDataSize = sizeof(unsigned int) * (workgroupCount * 4);
+    physicsScene.blockSum_buffSSBO.bufferData = 0;
+    physicsScene.blockSum_buffSSBO.bufferBindBase = 8;
+    setupSSBO(physicsScene.blockSum_buffSSBO);
+
+    // -------- Second Cell Index buffer --------
+    physicsScene.cell_index_twoSSBO.bufferDataSize = physicsScene.getParticleCountSize();
+    physicsScene.cell_index_twoSSBO.bufferData = 0;  // empty buffer
+    physicsScene.cell_index_twoSSBO.bufferBindBase = 9;
+    setupSSBO(physicsScene.cell_index_twoSSBO);   
+
+    // -------- Second Particle Index buffer --------
+    physicsScene.particle_index_twoSSBO.bufferDataSize = physicsScene.getParticleCountSize();
+    physicsScene.particle_index_twoSSBO.bufferData = 0;  // empty buffer
+    physicsScene.particle_index_twoSSBO.bufferBindBase = 10;
+    setupSSBO(physicsScene.particle_index_twoSSBO);   
 }
 
 void 
-Physics::buildGrid() {
+Physics::performSpatialHashAndSort() {
 
-    // Calculate uniform grid hash cells
+    /**
+     ***************************************
+     * * * * G R I D   H A S H I N G * * * *
+     ***************************************
+     */
     gridHashShader.use();
+
     glDispatchCompute(workgroupCount, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 
-    // Radix sort of hashed cell indices
-    /*
-     4 way radix sort processes 2 bits at once.
-     This halves the number of passes needed to sort the entire buffer,
-     thus we increment the shift key by 2 per pass. 
-     32 bits number i.e 16 passes
-    */
+    /**
+     ***********************************
+     * * * * R A D I X   S O R T * * * *
+     ***********************************
+     */
+    
+    /**
+     * 4 way radix sort processes 2 bits at once.
+     * 
+     * This halves the number of passes needed to sort the entire buffer,
+     * thus we increment the shift key by 2 per pass. 
+     * 32 bit number i.e 16 passes
+     */
+    bool swapBufferOneWithTwo = true;
     for (int shift_key = 0; shift_key < 32; shift_key += 2) {
 
-        // Phase 1: Order checking to ensure an early exit if all particles are already sorted
+        /** 
+         * PHASE 1
+         * 
+         * Order checking to ensure an early exit 
+         * if all particles are already sorted.
+         * 
+         * The check exits early by utilizing a flag
+         * which forces all threads to skip execution
+         * at the presense of even a single particle 
+         * thats out of place
+         */
 
         // reset the flag to zero before computation
         GLuint zero = 0;
@@ -230,11 +289,67 @@ Physics::buildGrid() {
         // if the buffer is sorted no need to continue
         if (abortFlagResult == 0) break;
 
+        /**
+         * PHASE 2
+         * 
+         * Performs a local prefiix scan on 512 particles
+         * per workgroup. 
+         * 
+         * Also stores the global offset values in a buffer. 
+         */
         prefixScanShader.use();
         prefixScanShader.setInt("shift_key", shift_key);
 
         glDispatchCompute(workgroupCount, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+        /**
+         * PHASE 3
+         * 
+         * The global offsets prefix sum is calculated by a single workgroup 
+         * i.e. 256 threads with a maximum of 1024 workgroup's worth of particles.
+         * 
+         * Each workgroup processes 512 particles so the maximum particle count is
+         * capped at 1024 * 512 = 524,288 particles
+         */
+        globalOffsetSumShader.use();
+
+        glDispatchCompute(1, 1, 1);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+        /**
+         * PHASE 4
+         *  
+         * Final scatter phase to globally sort all particles 
+         * and swap buffers in ping-pong manner
+         */
+        scatterShader.use();
+        scatterShader.setInt("shift_key", shift_key);
+
+        glDispatchCompute(workgroupCount, 1, 1);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+        if (swapBufferOneWithTwo) {
+            Buffer& inCellIndex = physicsScene.cell_index_oneSSBO;
+            Buffer& outCellIndex = physicsScene.cell_index_twoSSBO;
+            swapInputAndOutputBuffers(inCellIndex, outCellIndex);
+
+            Buffer& inParticleIndex = physicsScene.particle_index_oneSSBO;
+            Buffer& outParticleIndex = physicsScene.particle_index_twoSSBO;
+            swapInputAndOutputBuffers(inParticleIndex, outParticleIndex);
+
+            swapBufferOneWithTwo = false;
+        } else {
+            Buffer& inCellIndex = physicsScene.cell_index_twoSSBO;
+            Buffer& outCellIndex = physicsScene.cell_index_oneSSBO;
+            swapInputAndOutputBuffers(inCellIndex, outCellIndex);
+
+            Buffer& inParticleIndex = physicsScene.particle_index_twoSSBO;
+            Buffer& outParticleIndex = physicsScene.particle_index_oneSSBO;
+            swapInputAndOutputBuffers(inParticleIndex, outParticleIndex);
+
+            swapBufferOneWithTwo = true;
+        }
     }
 }
 
@@ -273,9 +388,35 @@ Physics::getScanPassCount(unsigned int n) {
     return std::bit_width(n - 1);
 }
 
+// returns the next biggest power of 2
+unsigned int
+Physics::getEffectiveThreadCount(unsigned int n) {
+    unsigned int bitWidth = std::bit_width(n - 1);
+    return 1u << bitWidth;
+}
+
 unsigned int
 Physics::getCountBufferDataSize() {
     return workgroupCount * 4 * sizeof(GLuint); // 4 integers (4 way radix) for each workgroup
+}
+
+// swaps the binding base of two buffers taken as parameters
+void
+Physics::swapBuffers(Buffer& b, GLuint base) {
+    glBindBufferBase(
+        GL_SHADER_STORAGE_BUFFER,
+        base,
+        b.bufferID
+    );
+}
+
+void
+Physics::swapInputAndOutputBuffers(Buffer& in, Buffer& out) {
+    GLuint inBase = in.bufferBindBase;
+    GLuint outBase = out.bufferBindBase;
+
+    swapBuffers(in, outBase);
+    swapBuffers(out, inBase);
 }
 
 void 

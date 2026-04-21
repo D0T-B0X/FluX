@@ -1,0 +1,114 @@
+#version 460 core
+
+#define CELL_INDEX_BUFFER_IN 4
+#define PARTICLE_INDEX_BUFFER_IN 5
+#define GLOBAL_OFFSET_BUFFER 7
+#define BLOCK_SUM_BUFFER 8
+#define CELL_INDEX_BUFFER_OUT 9
+#define PARTICLE_INDEX_BUFFER_OUT 10
+
+#define PARTICLE_COUNT 512
+#define THREADS_PER_GROUP 256
+
+#define NUM_BANKS 32
+#define LOG_NUM_BANKS 5
+
+#define CONFLICT_FREE_OFFSET(n) ((n) >> LOG_NUM_BANKS)
+#define CONFLICT_FREE_INDEX(n) (CONFLICT_FREE_OFFSET(n) + n)
+
+layout(local_size_x = THREADS_PER_GROUP, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, binding = CELL_INDEX_BUFFER_IN) buffer CellIndexBuffIn { uint cellIndexBuffIn[]; };
+layout(std430, binding = PARTICLE_INDEX_BUFFER_IN) buffer ParticleIndexBuffIn { uint particleIndexBuffIn[]; };
+layout(std430, binding = GLOBAL_OFFSET_BUFFER) buffer GlobalOffsetBuff { uint globalOffsetBuff[]; };
+layout(std430, binding = BLOCK_SUM_BUFFER) buffer BlockSumBuff { uint blockSumBuff[]; };
+layout(std430, binding = CELL_INDEX_BUFFER_OUT) buffer CellIndexBuffOut { uint cellIndexBuffOut[]; };
+layout(std430, binding = PARTICLE_INDEX_BUFFER_OUT) buffer ParticleIndexBuffOut { uint particleIndexBuffOut[]; };
+
+/**
+ * A cluster is a grouping of one type of digit
+ * e.g. all instances of digit 2 in the workgroup
+ * 
+ * This shared array holds each digit's instance count
+ */
+shared uint shared_cluster_size[4];
+shared uint shared_global_offset[4];
+shared uint shared_digit_starting_offset[4];
+shared uint shared_cell_indices_in[PARTICLE_COUNT + 16];
+shared uint shared_particle_indices_in[PARTICLE_COUNT + 16];
+
+uniform uint totalParticleCount;
+uniform uint workGroupCount;
+uniform uint shift_key;
+
+void
+main() {    
+    uint globalThreadIndex = gl_GlobalInvocationID.x;
+    uint workGroupIndex = gl_WorkGroupID.x;
+    uint localThreadIndex = gl_LocalInvocationIndex;
+    
+    uint effectiveGlobalThreadIndex = workGroupIndex * PARTICLE_COUNT + localThreadIndex;
+    uint conflictFreeEffectiveGlobalIndex = CONFLICT_FREE_INDEX(effectiveGlobalThreadIndex);
+
+    uint conflictFreeLocalIndex = CONFLICT_FREE_INDEX(localThreadIndex);
+
+    uint stridedEffectiveGlobalThreadIndex = effectiveGlobalThreadIndex + THREADS_PER_GROUP;
+    uint conflictFreeStridedEffectiveGlobalIndex = CONFLICT_FREE_INDEX(stridedEffectiveGlobalThreadIndex);
+
+    uint stridedLocalThreadIndex = localThreadIndex + THREADS_PER_GROUP;
+    uint conflictFreeStridedLocalIndex = CONFLICT_FREE_INDEX(stridedLocalThreadIndex);
+
+    if (effectiveGlobalThreadIndex < totalParticleCount) {
+        shared_cell_indices_in[conflictFreeLocalIndex] = cellIndexBuffIn[effectiveGlobalThreadIndex];
+        shared_particle_indices_in[conflictFreeLocalIndex] = particleIndexBuffIn[effectiveGlobalThreadIndex];
+    } 
+
+    if (stridedEffectiveGlobalThreadIndex < totalParticleCount) {
+        shared_cell_indices_in[conflictFreeStridedLocalIndex] = cellIndexBuffIn[stridedEffectiveGlobalThreadIndex];
+        shared_particle_indices_in[conflictFreeStridedLocalIndex] = particleIndexBuffIn[stridedEffectiveGlobalThreadIndex];
+    }
+
+    // Calculate global offsets for each digit
+    if (localThreadIndex < 4) {
+        uint digit = localThreadIndex;
+
+        uint digitOffsetIndex = digit * workGroupCount + workGroupIndex; 
+        shared_global_offset[localThreadIndex] = globalOffsetBuff[digitOffsetIndex];
+        shared_cluster_size[localThreadIndex] = blockSumBuff[digitOffsetIndex];
+    }
+    barrier();
+
+    // extract starting indices for all digits in the workgroup
+    if (localThreadIndex == 0) {
+        shared_digit_starting_offset[0] = 0u;
+        shared_digit_starting_offset[1] = shared_cluster_size[0];
+        shared_digit_starting_offset[2] = shared_cluster_size[0] + shared_cluster_size[1];
+        shared_digit_starting_offset[3] = shared_cluster_size[0] + shared_cluster_size[1] + shared_cluster_size[2];
+    }
+    barrier();
+
+    // Final index for the first element
+    if (effectiveGlobalThreadIndex < totalParticleCount) {
+        uint threadElement = shared_cell_indices_in[conflictFreeLocalIndex];
+        uint threadDigit = (threadElement >> shift_key) & 3;
+        uint threadClusterOffset = localThreadIndex - shared_digit_starting_offset[threadDigit];
+        uint threadFinalIndex = shared_global_offset[threadDigit] + threadClusterOffset;
+        
+        // write the final value to the global buffer
+        cellIndexBuffOut[threadFinalIndex] = shared_cell_indices_in[conflictFreeLocalIndex];
+        particleIndexBuffOut[threadFinalIndex] = shared_particle_indices_in[conflictFreeLocalIndex];
+    }
+
+    // Final index for the final element
+    if (stridedEffectiveGlobalThreadIndex < totalParticleCount) {    
+        uint stridedThreadElement = shared_cell_indices_in[conflictFreeStridedLocalIndex];
+        uint stridedThreadDigit = (stridedThreadElement >> shift_key) & 3;
+        uint stridedThreadClusterOffset = stridedLocalThreadIndex - shared_digit_starting_offset[stridedThreadDigit];
+        uint stridedThreadFinalIndex = shared_global_offset[stridedThreadDigit] + stridedThreadClusterOffset;
+        
+        // write the final value to the global buffer
+        cellIndexBuffOut[stridedThreadFinalIndex] = shared_cell_indices_in[conflictFreeStridedLocalIndex];
+        particleIndexBuffOut[stridedThreadFinalIndex] = shared_particle_indices_in[conflictFreeStridedLocalIndex];
+    }
+    barrier();
+}

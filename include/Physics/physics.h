@@ -14,18 +14,19 @@ public:
     Physics(Scene& activeScene);
 
 // -------- Uniform uploads --------
-    void            setCountSortUniforms();
     void            setDensityUniforms();
     void            setPressureUniforms();
     void            setForceUniforms();
     void            setGridUniforms();
     void            setOrderCheckUniforms();
     void            setPrefixScanUniforms();
+    void            setGlobalOffsetSumUniforms();
+    void            setScatterUniforms();
 
 // -------- Engine setup --------
     void            setupSSBO(Buffer& b);
     void            initSSBOs();
-    void            buildGrid();
+    void            performSpatialHashAndSort();
     void            setWorkGroupCount();
 
 // -------- Real-time simulation updates --------
@@ -35,6 +36,8 @@ public:
 
 // -------- Miscllaneous --------
     unsigned int    getCountBufferDataSize();
+    void            swapBuffers(Buffer& b, GLuint base);
+    void            swapInputAndOutputBuffers(Buffer& in, Buffer& out);
     void            setSmoothingRadius(float s);
     float           getSmoothingRadius();
 
@@ -48,11 +51,14 @@ private:
     Shader          gridHashShader;
     Shader          orderCheckShader;
     Shader          prefixScanShader;
+    Shader          globalOffsetSumShader;
+    Shader          scatterShader;
 
     float           SMOOTHING_RADIUS;
     unsigned int    workgroupCount;
 
     unsigned int    getScanPassCount(unsigned int n);
+    unsigned int    getEffectiveThreadCount(unsigned int n);
 };
 
 #endif

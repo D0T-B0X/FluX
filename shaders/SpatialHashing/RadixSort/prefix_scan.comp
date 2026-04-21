@@ -3,6 +3,7 @@
 #define CELL_INDEX_BUFFER 4
 #define PARTICLE_INDEX_BUFFER 5
 #define GLOBAL_OFFSET_BUFFER 7
+#define BLOCK_SUM_BUFFER 8
 
 #define PARTICLE_COUNT 512
 #define THREADS_PER_GROUP 256
@@ -22,6 +23,7 @@ layout(local_size_x = THREADS_PER_GROUP, local_size_y = 1, local_size_z = 1) in;
 layout(std430, binding = CELL_INDEX_BUFFER) buffer CellIndexBuff { uint cellIndexBuff[]; };
 layout(std430, binding = PARTICLE_INDEX_BUFFER) buffer ParticleIndexBuff { uint particleIndexBuff[]; };
 layout(std430, binding = GLOBAL_OFFSET_BUFFER) buffer GlobalOffsetBuff { uint globalOffsetBuff[]; };
+layout(std430, binding = BLOCK_SUM_BUFFER) buffer BlockSumBuff { uint blockSumBuff[]; };
 
 // 64 uints for padding to avoid bank conflict
 shared uint s_counts[PARTICLE_COUNT * 4 + 64];
@@ -181,8 +183,9 @@ main() {
         uint conflict_free_root_index  = CONFLICT_FREE_OFFSET(root_index) + root_index;
 
         local_offsets[digit] = s_counts[conflict_free_root_index];
-        uint globalOffsetBuffer_index = (digit * workGroupCount) + workGroupIndex;
-        globalOffsetBuff[globalOffsetBuffer_index] = s_counts[conflict_free_root_index]; 
+        uint globalOffsetAndBlockSumBufferIndex = (digit * workGroupCount) + workGroupIndex;
+        globalOffsetBuff[globalOffsetAndBlockSumBufferIndex] = s_counts[conflict_free_root_index]; 
+        blockSumBuff[globalOffsetAndBlockSumBufferIndex] = s_counts[conflict_free_root_index];
 
         s_counts[conflict_free_root_index] = 0u;
     }
@@ -268,7 +271,8 @@ main() {
     if (global_index_one < totalParticleCount) {
         uint offset = local_offsets[d_one];
         uint prefixSumIndex = d_one * PARTICLE_COUNT + localThreadIndex;
-        uint prefixSum = s_counts[CONFLICT_FREE_OFFSET(prefixSumIndex) + prefixSumIndex];
+        uint conflictFreePrefixSumIndex = CONFLICT_FREE_OFFSET(prefixSumIndex) + prefixSumIndex;
+        uint prefixSum = s_counts[conflictFreePrefixSumIndex];
         uint final_dest = offset + prefixSum;
 
         s_keys_shuffled[final_dest] = one_key;
@@ -279,7 +283,8 @@ main() {
     if (global_index_two < totalParticleCount) {
         uint offset = local_offsets[d_two];
         uint prefixSumIndex = d_two * PARTICLE_COUNT + localThreadIndex + THREADS_PER_GROUP;
-        uint prefixSum = s_counts[CONFLICT_FREE_OFFSET(prefixSumIndex) + prefixSumIndex];
+        uint conflictFreePrefixSumIndex = CONFLICT_FREE_OFFSET(prefixSumIndex) + prefixSumIndex;
+        uint prefixSum = s_counts[conflictFreePrefixSumIndex];
         uint final_dest = offset + prefixSum;
 
         s_keys_shuffled[final_dest] = two_key;

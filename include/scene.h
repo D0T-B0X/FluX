@@ -24,10 +24,13 @@ public:
     Buffer         velocity_densitySSBO;
     Buffer         force_pressureSSBO;
     Buffer         color_paddingSSBO;
-    Buffer         cell_indexSSBO;
-    Buffer         particle_indexSSBO;
+    Buffer         cell_index_oneSSBO;
+    Buffer         particle_index_oneSSBO;
     Buffer         abortFlag_buffSSBO;    
     Buffer         gloablOffset_buffSSBO;
+    Buffer         blockSum_buffSSBO;
+    Buffer         cell_index_twoSSBO;
+    Buffer         particle_index_twoSSBO;
 
     // Holds all sphere data in the simulation
     Particles                           particles;

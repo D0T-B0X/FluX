@@ -111,6 +111,8 @@ App::setup() {
     pEngine.setWorkGroupCount();    
     pEngine.setOrderCheckUniforms();
     pEngine.setPrefixScanUniforms();
+    pEngine.setGlobalOffsetSumUniforms();
+    pEngine.setScatterUniforms();
     pEngine.initSSBOs();
 
     // Render setup
