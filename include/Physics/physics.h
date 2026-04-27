@@ -48,7 +48,7 @@ private:
     float           SMOOTHING_RADIUS;
     int             workgroupCount;
 
-    GLuint          frame;
+    GLuint          timeQuery;
 
     // ------------- Uniform setup -------------
     void            setDensityUniforms();

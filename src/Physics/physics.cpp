@@ -4,8 +4,7 @@ Physics::Physics(Scene& activeScene)
     : 
     physicsScene(activeScene),
     timeAccumulator(0),
-    workgroupCount(0),
-    frame(1)
+    workgroupCount(0)
 { 
     SMOOTHING_RADIUS = 0.0f;
     gridHashShader.load(GRID_CELL_CSHADER_PATH);
@@ -16,18 +15,28 @@ Physics::Physics(Scene& activeScene)
     densityShader.load(DENSITY_CSHADER_PATH);
     pressureShader.load(PRESSURE_CSHADER_PATH);
     forceShader.load(FORCE_CSHADER_PATH);
+
+    glGenQueries(1, &timeQuery);
 }
 
 void 
 Physics::updateFrame() {
 
-    performSpatialHashAndSort();
+    glBeginQuery(GL_TIME_ELAPSED, timeQuery);
+    // performSpatialHashAndSort();
     computeSPHUpdates();
+    glEndQuery(GL_TIME_ELAPSED);
+
+    GLuint64 timeElapsedNs;
+    glGetQueryObjectui64v(timeQuery, GL_QUERY_RESULT, &timeElapsedNs);
+    double time_ms = timeElapsedNs / 1000000.0;
+    std::cout << "Per frame physics engine execution time: " << time_ms << " ms" << std::endl << std::endl; 
+
 }
 
 void 
 Physics::cleanup() {
-    
+
 }
 
 void
@@ -139,13 +148,6 @@ Physics::initSSBOs() {
 void 
 Physics::performSpatialHashAndSort() {
 
-    double totalIterationTime = 0.0;
-
-    GLuint timeQuery;
-    glGenQueries(1, &timeQuery);
-
-    glBeginQuery(GL_TIME_ELAPSED, timeQuery);
-
     /**
      ***************************************
      * * * * G R I D   H A S H I N G * * * *
@@ -155,15 +157,6 @@ Physics::performSpatialHashAndSort() {
 
     glDispatchCompute(workgroupCount, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
-
-    glEndQuery(GL_TIME_ELAPSED);
-
-    GLuint64 timeElapsedNs;
-    glGetQueryObjectui64v(timeQuery, GL_QUERY_RESULT, &timeElapsedNs);
-    double time_ms = timeElapsedNs / 1000000.0;
-    std::cout << "Grid hash takes " << time_ms << "ms to complete" << std::endl;
-
-    totalIterationTime += time_ms;
 
     /**
      ***********************************
@@ -178,62 +171,12 @@ Physics::performSpatialHashAndSort() {
      * thus we increment the shift key by 2 per pass. 
      * 32 bit number i.e 16 passes
      */
+
     bool swapBufferOneWithTwo = true;
     for (int shift_key = 0; shift_key < 32; shift_key += 2) {
 
-        /** 
-         * PHASE 1
-         * 
-         * Order checking to ensure an early exit 
-         * if all particles are already sorted.
-         * 
-         * The check exits early by utilizing a flag
-         * which forces all threads to skip execution
-         * at the presense of even a single particle 
-         * thats out of place
-         */
-
-        // reset the flag to zero before computation
-        GLuint zero = 0;
-        glNamedBufferSubData(
-            physicsScene.abortFlag_buffSSBO.bufferID, 
-            0, 
-            sizeof(GLuint), 
-            &zero
-        );
-        
-        glBeginQuery(GL_TIME_ELAPSED, timeQuery);
-
-        // begin order check
-        orderCheckShader.use();
-
-        glDispatchCompute(workgroupCount, 1, 1);
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-        glEndQuery(GL_TIME_ELAPSED);
-
-        glGetQueryObjectui64v(timeQuery, GL_QUERY_RESULT, &timeElapsedNs);
-        time_ms = timeElapsedNs / 1000000.0;
-        std::cout << "Order check takes " << time_ms << "ms to complete" << std::endl;
-
-        totalIterationTime += time_ms;
-
-        // extract the value of abort flag
-        GLuint abortFlagResult = 0;
-        glGetNamedBufferSubData(
-            physicsScene.abortFlag_buffSSBO.bufferID, 
-            0, 
-            sizeof(GLuint), 
-            &abortFlagResult
-        );
-
-        // if the buffer is sorted no need to continue
-        if (abortFlagResult == 0) break;
-
-        glBeginQuery(GL_TIME_ELAPSED, timeQuery);
-
         /**
-         * PHASE 2
+         * PHASE 1
          * 
          * Performs a local prefiix scan on 512 particles
          * per workgroup. 
@@ -246,19 +189,10 @@ Physics::performSpatialHashAndSort() {
         glDispatchCompute(workgroupCount, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-        glEndQuery(GL_TIME_ELAPSED);    
-
-        glGetQueryObjectui64v(timeQuery, GL_QUERY_RESULT, &timeElapsedNs);
-        time_ms = timeElapsedNs / 1000000.0;
-        std::cout << "Prefix scan takes " << time_ms << "ms to complete" << std::endl;
-
-        totalIterationTime += time_ms;
-
-        glBeginQuery(GL_TIME_ELAPSED, timeQuery);
 
         /**
-         * PHASE 3
-         * 
+         * PHASE 2
+         *
          * The global offsets prefix sum is calculated by a single workgroup 
          * i.e. 256 threads with a maximum of 1024 workgroup's worth of particles.
          * 
@@ -270,18 +204,9 @@ Physics::performSpatialHashAndSort() {
         glDispatchCompute(1, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-        glEndQuery(GL_TIME_ELAPSED);    
-
-        glGetQueryObjectui64v(timeQuery, GL_QUERY_RESULT, &timeElapsedNs);
-        time_ms = timeElapsedNs / 1000000.0;
-        std::cout << "Global offset takes " << time_ms << "ms to complete" << std::endl;
-
-        totalIterationTime += time_ms;
-
-        glBeginQuery(GL_TIME_ELAPSED, timeQuery);
 
         /**
-         * PHASE 4
+         * PHASE 3
          *  
          * Final scatter phase to globally sort all particles 
          * and swap buffers in ping-pong manner
@@ -291,14 +216,6 @@ Physics::performSpatialHashAndSort() {
 
         glDispatchCompute(workgroupCount, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-        glEndQuery(GL_TIME_ELAPSED);    
-
-        glGetQueryObjectui64v(timeQuery, GL_QUERY_RESULT, &timeElapsedNs);
-        time_ms = timeElapsedNs / 1000000.0;
-        std::cout << "Scatter takes " << time_ms << "ms to complete" << std::endl << std::endl;
-
-        totalIterationTime += time_ms;
 
         if (swapBufferOneWithTwo) {
             Buffer& inCellIndex = physicsScene.cell_index_oneSSBO;
@@ -322,8 +239,6 @@ Physics::performSpatialHashAndSort() {
             swapBufferOneWithTwo = true;
         }
     }
-
-    std::cout << "One Spatial Hash Iteration takes " << totalIterationTime << "ms to complete" << std::endl;
 }
 
 void
@@ -339,61 +254,22 @@ Physics::setWorkGroupCount() {
 
 void
 Physics::computeSPHUpdates() {
-    
-    double totalIterationTime = 0.0;
-
-    GLuint timeQuery;
-    glGenQueries(1, &timeQuery);
-
-
-    glBeginQuery(GL_TIME_ELAPSED, timeQuery);
 
     // Density calculations pass
     densityShader.use();
     glDispatchCompute(workgroupCount * 2, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-    glEndQuery(GL_TIME_ELAPSED);
-
-    GLuint64 timeElapsedNs;
-    glGetQueryObjectui64v(timeQuery, GL_QUERY_RESULT, &timeElapsedNs);
-    double time_ms = timeElapsedNs / 1000000.0;
-    std::cout << "Density takes " << time_ms << "ms to complete" << std::endl; 
-
-    totalIterationTime += time_ms;
-
-    glBeginQuery(GL_TIME_ELAPSED, timeQuery);
-
     // Pressure calculations pass
     pressureShader.use();
     glDispatchCompute(workgroupCount * 2, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-    glEndQuery(GL_TIME_ELAPSED);
-
-    glGetQueryObjectui64v(timeQuery, GL_QUERY_RESULT, &timeElapsedNs);
-    time_ms = timeElapsedNs / 1000000.0;
-    std::cout << "Pressure takes " << time_ms << "ms to complete" << std::endl;
-
-    totalIterationTime += time_ms;
-
-    glBeginQuery(GL_TIME_ELAPSED, timeQuery);
 
     // Pressure force calculations pass
     forceShader.use();
     forceShader.setFloat("dt", PHYSICS_DT);
     glDispatchCompute(workgroupCount * 2, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
-
-    glEndQuery(GL_TIME_ELAPSED);
-
-    glGetQueryObjectui64v(timeQuery, GL_QUERY_RESULT, &timeElapsedNs);
-    time_ms = timeElapsedNs / 1000000.0;
-    std::cout << "Force takes " << time_ms << "ms to complete" << std::endl;
-
-    totalIterationTime += time_ms;
-
-    std::cout << "SPH Calculations take " << totalIterationTime << "ms to complete" << std::endl << std::endl << std::endl << std::endl;
 }
 
 void 
