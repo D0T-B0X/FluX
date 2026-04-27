@@ -1,4 +1,5 @@
 #version 460 core
+#extension GL_KHR_shader_subgroup_basic : require
 
 #define CELL_INDEX_BUFFER_IN 4
 #define PARTICLE_INDEX_BUFFER_IN 5
@@ -37,15 +38,19 @@ shared uint shared_digit_starting_offset[4];
 shared uint shared_cell_indices_in[PARTICLE_COUNT + 16];
 shared uint shared_particle_indices_in[PARTICLE_COUNT + 16];
 
-uniform uint totalParticleCount;
-uniform uint workGroupCount;
-uniform uint shift_key;
+uniform int totalParticleCount;
+uniform int workGroupCount;
+uniform int shift_key;
 
 void
 main() {    
     uint globalThreadIndex = gl_GlobalInvocationID.x;
     uint workGroupIndex = gl_WorkGroupID.x;
     uint localThreadIndex = gl_LocalInvocationIndex;
+    uint vramBlockSize = gl_SubgroupSize;
+    uint totalParticleCountU = uint(totalParticleCount);
+    uint workGroupCountU = uint(workGroupCount);
+    uint shiftKeyU = uint(shift_key);
     
     uint effectiveGlobalThreadIndex = workGroupIndex * PARTICLE_COUNT + localThreadIndex;
     uint conflictFreeEffectiveGlobalIndex = CONFLICT_FREE_INDEX(effectiveGlobalThreadIndex);
@@ -58,12 +63,12 @@ main() {
     uint stridedLocalThreadIndex = localThreadIndex + THREADS_PER_GROUP;
     uint conflictFreeStridedLocalIndex = CONFLICT_FREE_INDEX(stridedLocalThreadIndex);
 
-    if (effectiveGlobalThreadIndex < totalParticleCount) {
+    if (effectiveGlobalThreadIndex < totalParticleCountU) {
         shared_cell_indices_in[conflictFreeLocalIndex] = cellIndexBuffIn[effectiveGlobalThreadIndex];
         shared_particle_indices_in[conflictFreeLocalIndex] = particleIndexBuffIn[effectiveGlobalThreadIndex];
     } 
 
-    if (stridedEffectiveGlobalThreadIndex < totalParticleCount) {
+    if (stridedEffectiveGlobalThreadIndex < totalParticleCountU) {
         shared_cell_indices_in[conflictFreeStridedLocalIndex] = cellIndexBuffIn[stridedEffectiveGlobalThreadIndex];
         shared_particle_indices_in[conflictFreeStridedLocalIndex] = particleIndexBuffIn[stridedEffectiveGlobalThreadIndex];
     }
@@ -72,7 +77,7 @@ main() {
     if (localThreadIndex < 4) {
         uint digit = localThreadIndex;
 
-        uint digitOffsetIndex = digit * workGroupCount + workGroupIndex; 
+        uint digitOffsetIndex = digit * workGroupCountU + workGroupIndex; 
         shared_global_offset[localThreadIndex] = globalOffsetBuff[digitOffsetIndex];
         shared_cluster_size[localThreadIndex] = blockSumBuff[digitOffsetIndex];
     }
@@ -88,9 +93,9 @@ main() {
     barrier();
 
     // Final index for the first element
-    if (effectiveGlobalThreadIndex < totalParticleCount) {
+    if (effectiveGlobalThreadIndex < totalParticleCountU) {
         uint threadElement = shared_cell_indices_in[conflictFreeLocalIndex];
-        uint threadDigit = (threadElement >> shift_key) & 3;
+        uint threadDigit = (threadElement >> shiftKeyU) & 3;
         uint threadClusterOffset = localThreadIndex - shared_digit_starting_offset[threadDigit];
         uint threadFinalIndex = shared_global_offset[threadDigit] + threadClusterOffset;
         
@@ -99,10 +104,10 @@ main() {
         particleIndexBuffOut[threadFinalIndex] = shared_particle_indices_in[conflictFreeLocalIndex];
     }
 
-    // Final index for the final element
-    if (stridedEffectiveGlobalThreadIndex < totalParticleCount) {    
+    // Final index for the second element
+    if (stridedEffectiveGlobalThreadIndex < totalParticleCountU) {    
         uint stridedThreadElement = shared_cell_indices_in[conflictFreeStridedLocalIndex];
-        uint stridedThreadDigit = (stridedThreadElement >> shift_key) & 3;
+        uint stridedThreadDigit = (stridedThreadElement >> shiftKeyU) & 3;
         uint stridedThreadClusterOffset = stridedLocalThreadIndex - shared_digit_starting_offset[stridedThreadDigit];
         uint stridedThreadFinalIndex = shared_global_offset[stridedThreadDigit] + stridedThreadClusterOffset;
         

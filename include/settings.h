@@ -17,8 +17,8 @@
 // -------- OpenGL Window Settings ----------
 inline const char*              NAME                     =    "FluX";
 
-inline const unsigned int       SCR_WIDTH                =    1920u;
-inline const unsigned int       SCR_HEIGHT               =    1200u;
+inline const unsigned int       SCR_WIDTH                =    700u;
+inline const unsigned int       SCR_HEIGHT               =    400u;
 
 // -------- Camera Settings -----------------
 inline constexpr glm::vec3      CAMERA_POSITION          =    glm::vec3(0.0f, 0.0f, 2.0f);
@@ -27,9 +27,9 @@ inline constexpr float          MOUSE_SENSITIVITY        =    0.5f;
 inline constexpr float          MOVEMENT_SPEED           =    0.5f;
 
 // -------- Dimensions Constraints ----------
-inline constexpr unsigned int   GRID_SIDE                =    16u;
-inline constexpr float          MIN_BOUND                =   -2.0f;
-inline constexpr float          MAX_BOUND                =    2.0f;
+inline constexpr int            GRID_SIDE                =    20;
+inline constexpr float          MIN_BOUND                =   -1.0f;
+inline constexpr float          MAX_BOUND                =    1.0f;
 inline constexpr float          FLOOR_BOUNDARY           =   -0.1f;
 inline constexpr float          SPHERE_RADIUS            =    0.05f;
 inline constexpr unsigned int   SPHERE_SUBDIVISIONS      =    6u;
@@ -55,7 +55,7 @@ inline constexpr float          VISCOSITY                =    0.001f;
 // **** !! W A R N I N G !! ****
 // **** !! W A R N I N G !! ****
 // DO NOT MODIFY UNLESS YOU KNOW WHAT YOU ARE DOING
-inline constexpr unsigned int   THREADS_PER_GROUP        =    256u;
-inline constexpr unsigned int   PARTICLES_PER_WORKGROUP  =    THREADS_PER_GROUP * 2;
+inline constexpr int            THREADS_PER_GROUP        =    256;
+inline constexpr int            PARTICLES_PER_WORKGROUP  =    THREADS_PER_GROUP * 2;
 
 #endif

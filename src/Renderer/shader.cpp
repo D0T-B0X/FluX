@@ -103,7 +103,7 @@ void Shader::checkCompileErrors(uint shader, const char* type, MeshType mType) {
     char infoLog[1024];
     std::string debugTypeName = mType == SPHERE ? "SPHERE" : "SURFACE";
 
-    if (type != "PROGRAM") {
+    if (std::string(type) != "PROGRAM") {
         glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
         if (!success) {
             glGetShaderInfoLog(shader, 1024, NULL, infoLog);
@@ -160,7 +160,7 @@ void Shader::load(const char* computePath) {
 
     // Link the program to the GPU
     glLinkProgram(ID);
-    checkCompileErrors(ID, "PHYSICS_PROGRAM");
+    checkCompileErrors(ID, "PROGRAM");
 
     // Delete shaders after compilation is complete
     glDeleteShader(physics);
@@ -195,7 +195,7 @@ void Shader::checkCompileErrors(uint shader, const char* type) {
     char infoLog[1024];
     std::string debugTypeName = "PHYSICS";
 
-    if (type != "PROGRAM") {
+    if (std::string(type) != "PROGRAM") {
         glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
         if (!success) {
             glGetShaderInfoLog(shader, 1024, NULL, infoLog);

@@ -4,17 +4,18 @@ Physics::Physics(Scene& activeScene)
     : 
     physicsScene(activeScene),
     timeAccumulator(0),
-    workgroupCount(0)
+    workgroupCount(0),
+    frame(1)
 { 
     SMOOTHING_RADIUS = 0.0f;
-    densityShader.load(DENSITY_CSHADER_PATH);
-    pressureShader.load(PRESSURE_CSHADER_PATH);
-    forceShader.load(FORCE_CSHADER_PATH);
     gridHashShader.load(GRID_CELL_CSHADER_PATH);
     orderCheckShader.load(ORDER_CHECK_CSHADER_PATH);
     prefixScanShader.load(LOCAL_PREFIX_SCAN_CSHADER_PATH);
     globalOffsetSumShader.load(GLOBAL_OFFSET_SUM_CSHADER_PATH);
     scatterShader.load(SCATTER_CSHADER_PATH);
+    densityShader.load(DENSITY_CSHADER_PATH);
+    pressureShader.load(PRESSURE_CSHADER_PATH);
+    forceShader.load(FORCE_CSHADER_PATH);
 }
 
 void 
@@ -25,106 +26,20 @@ Physics::updateFrame() {
 }
 
 void 
-Physics::setGridUniforms() {
-    gridHashShader.use();
-
-    gridHashShader.setInt("numParticles", physicsScene.getParticleCount());
-    // slighly larger cell size to collect all particles
-    gridHashShader.setFloat("cell_size", 1.1 * SMOOTHING_RADIUS); 
-    gridHashShader.setInt("gridSize", GRID_SIDE);
-    gridHashShader.setVec3("gridMin", glm::vec3(MIN_BOUND, MIN_BOUND, MIN_BOUND));
-}
-
-void 
-Physics::setDensityUniforms() {
-    densityShader.use();
-
-    densityShader.setInt("numParticles", physicsScene.particleCount);
-    /* 
-     Pass smoothing radius square to 
-     the compute densityShader to prevent repetition
-     */
-    densityShader.setFloat("h2", SMOOTHING_RADIUS*SMOOTHING_RADIUS);
-
-    // Poly6 Kernel fn
-    float polySix = 315 / (64 * M_PI * pow(SMOOTHING_RADIUS, 9));
-    densityShader.setFloat("poly6", polySix);
-}
-
-void 
-Physics::setPressureUniforms() {
-    pressureShader.use();
-
-    pressureShader.setInt("numParticles", physicsScene.particleCount);
-    // Stiffness coefficient
-    pressureShader.setFloat("k", K);
-    // Inverse of the resting density of the fluid
-    pressureShader.setFloat("restingRhoInv", 1 / RESTING_DENSITY);
-    // Gamma for Tait's equation
-    pressureShader.setFloat("gamma", GAMMA);
-}
-
-void 
-Physics::setForceUniforms() {
-    forceShader.use();
-
-    forceShader.setInt("numParticles", physicsScene.particleCount);
-
-    forceShader.setFloat("h", SMOOTHING_RADIUS);
-    forceShader.setVec3("GRAVITY_C", GRAV_CONSTANT);         // m/s²
-    forceShader.setFloat("mu", VISCOSITY);                      // Pa·s (water)
-
-    // Spike kernel fn
-    float spike = -45 / (M_PI * pow(SMOOTHING_RADIUS, 6));
-    forceShader.setFloat("spikeGrad", spike);
-
-    // Viscosity kernel fn
-    // which is the -ve of spike
-    forceShader.setFloat("viscLaplacian", -spike);
-
-    // Floor boundary
-    forceShader.setFloat("floorY", FLOOR_BOUNDARY);
-    forceShader.setFloat("damping", DAMPING_COEFF);
-}
-
-void
-Physics::setOrderCheckUniforms() {
-    orderCheckShader.use();
-
-    orderCheckShader.setInt("totalParticleCount", physicsScene.particleCount);
-}
-
-void
-Physics::setPrefixScanUniforms() {
-    prefixScanShader.use();
-
-    prefixScanShader.setInt("totalParticleCount", physicsScene.particleCount);
-    prefixScanShader.setInt("workGroupCount", workgroupCount);
-
-    unsigned int PARTICLES_PROCESSED_PER_WORKGROUP = THREADS_PER_GROUP * 2;
-    prefixScanShader.setInt("passCount", getScanPassCount(PARTICLES_PROCESSED_PER_WORKGROUP));
-}
-
-void
-Physics::setGlobalOffsetSumUniforms() {
-    globalOffsetSumShader.use();
-
-    unsigned int elementsProcessedPerThread = ceil((float)workgroupCount / (float)THREADS_PER_GROUP);
-    globalOffsetSumShader.setInt("elementsProcessedPerThread", elementsProcessedPerThread);
-    globalOffsetSumShader.setInt("effectiveThreadCount", getEffectiveThreadCount(workgroupCount * 4));
-}
-
-void
-Physics::setScatterUniforms() {
-    scatterShader.use();
-    
-    scatterShader.setInt("totalParticleCount", physicsScene.particleCount);
-    scatterShader.setInt("workGroupCount", workgroupCount);
-}
-
-void 
 Physics::cleanup() {
     
+}
+
+void
+Physics::uploadUinforms() {
+    setGridUniforms();
+    setDensityUniforms();
+    setPressureUniforms();
+    setForceUniforms();
+    setOrderCheckUniforms();
+    setPrefixScanUniforms();
+    setGlobalOffsetSumUniforms();
+    setScatterUniforms();
 }
 
 void 
@@ -224,6 +139,13 @@ Physics::initSSBOs() {
 void 
 Physics::performSpatialHashAndSort() {
 
+    double totalIterationTime = 0.0;
+
+    GLuint timeQuery;
+    glGenQueries(1, &timeQuery);
+
+    glBeginQuery(GL_TIME_ELAPSED, timeQuery);
+
     /**
      ***************************************
      * * * * G R I D   H A S H I N G * * * *
@@ -233,6 +155,15 @@ Physics::performSpatialHashAndSort() {
 
     glDispatchCompute(workgroupCount, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
+
+    glEndQuery(GL_TIME_ELAPSED);
+
+    GLuint64 timeElapsedNs;
+    glGetQueryObjectui64v(timeQuery, GL_QUERY_RESULT, &timeElapsedNs);
+    double time_ms = timeElapsedNs / 1000000.0;
+    std::cout << "Grid hash takes " << time_ms << "ms to complete" << std::endl;
+
+    totalIterationTime += time_ms;
 
     /**
      ***********************************
@@ -271,11 +202,21 @@ Physics::performSpatialHashAndSort() {
             &zero
         );
         
+        glBeginQuery(GL_TIME_ELAPSED, timeQuery);
+
         // begin order check
         orderCheckShader.use();
 
         glDispatchCompute(workgroupCount, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+        glEndQuery(GL_TIME_ELAPSED);
+
+        glGetQueryObjectui64v(timeQuery, GL_QUERY_RESULT, &timeElapsedNs);
+        time_ms = timeElapsedNs / 1000000.0;
+        std::cout << "Order check takes " << time_ms << "ms to complete" << std::endl;
+
+        totalIterationTime += time_ms;
 
         // extract the value of abort flag
         GLuint abortFlagResult = 0;
@@ -288,6 +229,8 @@ Physics::performSpatialHashAndSort() {
 
         // if the buffer is sorted no need to continue
         if (abortFlagResult == 0) break;
+
+        glBeginQuery(GL_TIME_ELAPSED, timeQuery);
 
         /**
          * PHASE 2
@@ -303,6 +246,16 @@ Physics::performSpatialHashAndSort() {
         glDispatchCompute(workgroupCount, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
+        glEndQuery(GL_TIME_ELAPSED);    
+
+        glGetQueryObjectui64v(timeQuery, GL_QUERY_RESULT, &timeElapsedNs);
+        time_ms = timeElapsedNs / 1000000.0;
+        std::cout << "Prefix scan takes " << time_ms << "ms to complete" << std::endl;
+
+        totalIterationTime += time_ms;
+
+        glBeginQuery(GL_TIME_ELAPSED, timeQuery);
+
         /**
          * PHASE 3
          * 
@@ -317,6 +270,16 @@ Physics::performSpatialHashAndSort() {
         glDispatchCompute(1, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
+        glEndQuery(GL_TIME_ELAPSED);    
+
+        glGetQueryObjectui64v(timeQuery, GL_QUERY_RESULT, &timeElapsedNs);
+        time_ms = timeElapsedNs / 1000000.0;
+        std::cout << "Global offset takes " << time_ms << "ms to complete" << std::endl;
+
+        totalIterationTime += time_ms;
+
+        glBeginQuery(GL_TIME_ELAPSED, timeQuery);
+
         /**
          * PHASE 4
          *  
@@ -328,6 +291,14 @@ Physics::performSpatialHashAndSort() {
 
         glDispatchCompute(workgroupCount, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+        glEndQuery(GL_TIME_ELAPSED);    
+
+        glGetQueryObjectui64v(timeQuery, GL_QUERY_RESULT, &timeElapsedNs);
+        time_ms = timeElapsedNs / 1000000.0;
+        std::cout << "Scatter takes " << time_ms << "ms to complete" << std::endl << std::endl;
+
+        totalIterationTime += time_ms;
 
         if (swapBufferOneWithTwo) {
             Buffer& inCellIndex = physicsScene.cell_index_oneSSBO;
@@ -351,48 +322,190 @@ Physics::performSpatialHashAndSort() {
             swapBufferOneWithTwo = true;
         }
     }
+
+    std::cout << "One Spatial Hash Iteration takes " << totalIterationTime << "ms to complete" << std::endl;
 }
 
 void
 Physics::setWorkGroupCount() {
     // Lacks proper error handling :/
-    if (physicsScene.particleCount < 1) { workgroupCount = 1; return; }
+    if (physicsScene.getParticleCount() < 1) { workgroupCount = 1; return; }
 
-    unsigned int PARTCILES_PROCESSED_PER_WORKGROUP = THREADS_PER_GROUP * 2;
-    workgroupCount = ceil((float)physicsScene.particleCount / (float)PARTCILES_PROCESSED_PER_WORKGROUP);
+    int PARTCILES_PROCESSED_PER_WORKGROUP = THREADS_PER_GROUP * 2;
+    workgroupCount = ceil((float)physicsScene.getParticleCount() / (float)PARTCILES_PROCESSED_PER_WORKGROUP);
+
+    std::cout << "Workgroup count: " << workgroupCount << std::endl;
 }
 
 void
 Physics::computeSPHUpdates() {
     
+    double totalIterationTime = 0.0;
+
+    GLuint timeQuery;
+    glGenQueries(1, &timeQuery);
+
+
+    glBeginQuery(GL_TIME_ELAPSED, timeQuery);
+
     // Density calculations pass
     densityShader.use();
-    glDispatchCompute(workgroupCount, 1, 1);
+    glDispatchCompute(workgroupCount * 2, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+    glEndQuery(GL_TIME_ELAPSED);
+
+    GLuint64 timeElapsedNs;
+    glGetQueryObjectui64v(timeQuery, GL_QUERY_RESULT, &timeElapsedNs);
+    double time_ms = timeElapsedNs / 1000000.0;
+    std::cout << "Density takes " << time_ms << "ms to complete" << std::endl; 
+
+    totalIterationTime += time_ms;
+
+    glBeginQuery(GL_TIME_ELAPSED, timeQuery);
 
     // Pressure calculations pass
     pressureShader.use();
-    glDispatchCompute(workgroupCount, 1, 1);
+    glDispatchCompute(workgroupCount * 2, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+    glEndQuery(GL_TIME_ELAPSED);
+
+    glGetQueryObjectui64v(timeQuery, GL_QUERY_RESULT, &timeElapsedNs);
+    time_ms = timeElapsedNs / 1000000.0;
+    std::cout << "Pressure takes " << time_ms << "ms to complete" << std::endl;
+
+    totalIterationTime += time_ms;
+
+    glBeginQuery(GL_TIME_ELAPSED, timeQuery);
 
     // Pressure force calculations pass
     forceShader.use();
     forceShader.setFloat("dt", PHYSICS_DT);
-    glDispatchCompute(workgroupCount, 1, 1);
+    glDispatchCompute(workgroupCount * 2, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
+
+    glEndQuery(GL_TIME_ELAPSED);
+
+    glGetQueryObjectui64v(timeQuery, GL_QUERY_RESULT, &timeElapsedNs);
+    time_ms = timeElapsedNs / 1000000.0;
+    std::cout << "Force takes " << time_ms << "ms to complete" << std::endl;
+
+    totalIterationTime += time_ms;
+
+    std::cout << "SPH Calculations take " << totalIterationTime << "ms to complete" << std::endl << std::endl << std::endl << std::endl;
 }
 
-unsigned int 
-Physics::getScanPassCount(unsigned int n) {
+void 
+Physics::setGridUniforms() {
+    gridHashShader.use();
+
+    gridHashShader.setInt("numParticles", physicsScene.getParticleCount());
+    // slighly larger cell size to collect all particles
+    gridHashShader.setFloat("cell_size", 1.1 * SMOOTHING_RADIUS); 
+    gridHashShader.setInt("gridSize", GRID_SIDE);
+    gridHashShader.setVec3("gridMin", glm::vec3(MIN_BOUND, MIN_BOUND, MIN_BOUND));
+}
+
+void 
+Physics::setDensityUniforms() {
+    densityShader.use();
+
+    densityShader.setInt("numParticles", physicsScene.getParticleCount());
+    /* 
+     Pass smoothing radius square to 
+     the compute densityShader to prevent repetition
+     */
+    densityShader.setFloat("h2", SMOOTHING_RADIUS*SMOOTHING_RADIUS);
+
+    // Poly6 Kernel fn
+    float polySix = 315 / (64 * M_PI * pow(SMOOTHING_RADIUS, 9));
+    densityShader.setFloat("poly6", polySix);
+}
+
+void 
+Physics::setPressureUniforms() {
+    pressureShader.use();
+
+    pressureShader.setInt("numParticles", physicsScene.getParticleCount());
+    // Stiffness coefficient
+    pressureShader.setFloat("k", K);
+    // Inverse of the resting density of the fluid
+    pressureShader.setFloat("restingRhoInv", 1 / RESTING_DENSITY);
+    // Gamma for Tait's equation
+    pressureShader.setFloat("gamma", GAMMA);
+}
+
+void 
+Physics::setForceUniforms() {
+    forceShader.use();
+
+    forceShader.setInt("numParticles", physicsScene.getParticleCount());
+
+    forceShader.setFloat("h", SMOOTHING_RADIUS);
+    forceShader.setVec3("GRAVITY_C", GRAV_CONSTANT);         // m/s²
+    forceShader.setFloat("mu", VISCOSITY);                      // Pa·s (water)
+
+    // Spike kernel fn
+    float spike = -45 / (M_PI * pow(SMOOTHING_RADIUS, 6));
+    forceShader.setFloat("spikeGrad", spike);
+
+    // Viscosity kernel fn
+    // which is the -ve of spike
+    forceShader.setFloat("viscLaplacian", -spike);
+
+    // Floor boundary
+    forceShader.setFloat("floorY", FLOOR_BOUNDARY);
+    forceShader.setFloat("damping", DAMPING_COEFF);
+}
+
+void
+Physics::setOrderCheckUniforms() {
+    orderCheckShader.use();
+
+    orderCheckShader.setInt("totalParticleCount", physicsScene.getParticleCount());
+}
+
+void
+Physics::setPrefixScanUniforms() {
+    prefixScanShader.use();
+
+    prefixScanShader.setInt("totalParticleCount", physicsScene.getParticleCount());
+    prefixScanShader.setInt("workGroupCount", workgroupCount);
+
+    int PARTICLES_PROCESSED_PER_WORKGROUP = THREADS_PER_GROUP * 2;
+    prefixScanShader.setInt("passCount", getScanPassCount(PARTICLES_PROCESSED_PER_WORKGROUP));
+}
+
+void
+Physics::setGlobalOffsetSumUniforms() {
+    globalOffsetSumShader.use();
+
+    int elementsProcessedPerThread = ceil((float)workgroupCount / (float)THREADS_PER_GROUP);
+    globalOffsetSumShader.setInt("elementsProcessedPerThread", elementsProcessedPerThread);
+    globalOffsetSumShader.setInt("effectiveThreadCount", getEffectiveThreadCount(workgroupCount * 4));
+}
+
+void
+Physics::setScatterUniforms() {
+    scatterShader.use();
+    
+    scatterShader.setInt("totalParticleCount", physicsScene.getParticleCount());
+    scatterShader.setInt("workGroupCount", workgroupCount);
+}
+
+int 
+Physics::getScanPassCount(int n) {
     if (n <= 1) return 0;
-    return std::bit_width(n - 1);
+
+    return std::bit_width((GLuint)n - 1); 
 }
 
 // returns the next biggest power of 2
-unsigned int
-Physics::getEffectiveThreadCount(unsigned int n) {
-    unsigned int bitWidth = std::bit_width(n - 1);
-    return 1u << bitWidth;
+int
+Physics::getEffectiveThreadCount(int n) {
+    if (n <= 1) return 1;
+    return 1 << getScanPassCount(n);
 }
 
 unsigned int

@@ -22,17 +22,19 @@ layout(std430, binding = GLOBAL_OFFSET_BUFFER) buffer GlobalOffsetBuff { uint gl
 shared uint shared_offset_array[SHARED_OFFSET_ARRAY_SIZE + 128];
 shared uint shared_block_sums[THREADS_PER_GROUP + 8];
 
-uniform uint elementsProcessedPerThread;
+uniform int elementsProcessedPerThread;
 // count of logical threads processed by the workgroup
-uniform uint effectiveThreadCount;
+uniform int effectiveThreadCount;
 
 void
 main() {
     uint workGroupIndex = gl_WorkGroupID.x;
     uint localThreadIndex = gl_LocalInvocationIndex;
     uint conflictFreeLocalIndex = CONFLICT_FREE_INDEX(localThreadIndex);
+    uint elementsProcessedPerThreadU = uint(elementsProcessedPerThread);
+    uint effectiveThreadCountU = uint(effectiveThreadCount);
 
-    for(uint thread = 0; thread < elementsProcessedPerThread; ++thread) {
+    for(uint thread = 0; thread < elementsProcessedPerThreadU; ++thread) {
         uint index = localThreadIndex + (thread * THREADS_PER_GROUP);
         uint conflictFreeIndex = CONFLICT_FREE_INDEX(index);
 
@@ -44,11 +46,11 @@ main() {
     barrier();
 
     // Fill shared memory array with global offsets
-    for(uint thread = 0; thread < elementsProcessedPerThread; ++thread) {
+    for(uint thread = 0; thread < elementsProcessedPerThreadU; ++thread) {
         uint index = localThreadIndex + (thread * THREADS_PER_GROUP);
         uint conflictFreeIndex = CONFLICT_FREE_INDEX(index);
 
-        if (index < effectiveThreadCount) {
+        if (index < effectiveThreadCountU) {
             shared_offset_array[conflictFreeIndex] = globalOffsetBuff[index];
         }
     }
@@ -56,8 +58,8 @@ main() {
 
     // Add and store block sums in shared array
     uint sum = 0u;
-    for(uint thread = 0; thread < elementsProcessedPerThread; ++thread) {
-        uint index = (localThreadIndex * elementsProcessedPerThread) + thread;
+    for(uint thread = 0; thread < elementsProcessedPerThreadU; ++thread) {
+        uint index = (localThreadIndex * elementsProcessedPerThreadU) + thread;
         uint conflictFreeIndex = CONFLICT_FREE_INDEX(index);
 
         uint temp = shared_offset_array[conflictFreeIndex];
@@ -114,19 +116,19 @@ main() {
     }
 
     // store final global offsets in offset buffer
-    for(uint thread = 0; thread < elementsProcessedPerThread; ++thread) {
-        uint index = (localThreadIndex * elementsProcessedPerThread) + thread;
+    for(uint thread = 0; thread < elementsProcessedPerThreadU; ++thread) {
+        uint index = (localThreadIndex * elementsProcessedPerThreadU) + thread;
         uint conflictFreeIndex = CONFLICT_FREE_INDEX(index);
 
         shared_offset_array[conflictFreeIndex] += shared_block_sums[conflictFreeLocalIndex];
     }
     barrier();
 
-    for(uint thread = 0; thread < elementsProcessedPerThread; ++thread) {
+    for(uint thread = 0; thread < elementsProcessedPerThreadU; ++thread) {
         uint index = localThreadIndex + (thread * THREADS_PER_GROUP);
         uint conflictFreeIndex = CONFLICT_FREE_INDEX(index);
         
-        if (index < effectiveThreadCount) {
+        if (index < effectiveThreadCountU) {
             globalOffsetBuff[index] = shared_offset_array[conflictFreeIndex];
         }
     }

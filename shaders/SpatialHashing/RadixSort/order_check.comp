@@ -14,7 +14,7 @@ layout(std430, binding = ABORT_FLAG_BUFFER) buffer AbortFlag { uint abortFlag; }
 shared uint local_indices_copy[PARTICLE_COUNT];
 shared uint check_array[PARTICLE_COUNT];
 
-uniform uint totalParticleCount;
+uniform int totalParticleCount;
 
 void
 main() {
@@ -32,16 +32,17 @@ main() {
 
     uint globalElementIndex = workGroupIndex * PARTICLE_COUNT + localThreadIndex;
     uint stridedGlobalElementIndex = globalElementIndex + THREADS_PER_GROUP;
+    uint totalParticleCountU = uint(totalParticleCount);
 
     local_indices_copy[localElementIndex] = 0xFFFFFFFFu;
     local_indices_copy[stridedLocalElementIndex] = 0xFFFFFFFFu;
 
     // copy all index data to local buffers for faster re-reads
-    if (globalElementIndex < totalParticleCount) {
+    if (globalElementIndex < totalParticleCountU) {
         local_indices_copy[localElementIndex] = cellIndexBuff[globalElementIndex];
     } 
 
-    if (stridedGlobalElementIndex < totalParticleCount) {
+    if (stridedGlobalElementIndex < totalParticleCountU) {
         local_indices_copy[stridedLocalElementIndex] = cellIndexBuff[stridedGlobalElementIndex];
     }
     barrier();
@@ -52,13 +53,13 @@ main() {
     barrier();
 
     // set comparison mask to 1 if unsorted and 0 if sorted
-    if (globalElementIndex + 1u < totalParticleCount) {
+    if (globalElementIndex + 1u < totalParticleCountU) {
         uint currentElement = local_indices_copy[localElementIndex];
         uint nextElement = local_indices_copy[localElementIndex + 1u];
         check_array[localElementIndex] = (currentElement <= nextElement) ? 0u : 1u;
     }
 
-    if (stridedGlobalElementIndex + 1u < totalParticleCount) {
+    if (stridedGlobalElementIndex + 1u < totalParticleCountU) {
         uint currentElement = local_indices_copy[stridedLocalElementIndex];
         uint nextElement;
 

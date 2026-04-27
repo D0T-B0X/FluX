@@ -13,26 +13,17 @@ class Physics {
 public: 
     Physics(Scene& activeScene);
 
-// -------- Uniform uploads --------
-    void            setDensityUniforms();
-    void            setPressureUniforms();
-    void            setForceUniforms();
-    void            setGridUniforms();
-    void            setOrderCheckUniforms();
-    void            setPrefixScanUniforms();
-    void            setGlobalOffsetSumUniforms();
-    void            setScatterUniforms();
-
-// -------- Engine setup --------
-    void            setupSSBO(Buffer& b);
-    void            initSSBOs();
-    void            performSpatialHashAndSort();
-    void            setWorkGroupCount();
-
 // -------- Real-time simulation updates --------
     void            updateFrame();
     void            cleanup();
+    void            performSpatialHashAndSort();
     void            computeSPHUpdates();
+
+    // -------- Engine setup --------
+    void            uploadUinforms();
+    void            setupSSBO(Buffer& b);
+    void            initSSBOs();
+    void            setWorkGroupCount();
 
 // -------- Miscllaneous --------
     unsigned int    getCountBufferDataSize();
@@ -55,10 +46,22 @@ private:
     Shader          scatterShader;
 
     float           SMOOTHING_RADIUS;
-    unsigned int    workgroupCount;
+    int             workgroupCount;
 
-    unsigned int    getScanPassCount(unsigned int n);
-    unsigned int    getEffectiveThreadCount(unsigned int n);
+    GLuint          frame;
+
+    // ------------- Uniform setup -------------
+    void            setDensityUniforms();
+    void            setPressureUniforms();
+    void            setForceUniforms();
+    void            setGridUniforms();
+    void            setOrderCheckUniforms();
+    void            setPrefixScanUniforms();
+    void            setGlobalOffsetSumUniforms();
+    void            setScatterUniforms();
+
+    int             getScanPassCount(int n);
+    int             getEffectiveThreadCount(int n);
 };
 
 #endif

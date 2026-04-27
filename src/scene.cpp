@@ -28,9 +28,15 @@ Particles& Scene::getSpheres() {
     return particles;
 }
 
-unsigned int Scene::getParticleCount() {
+int Scene::getParticleCount() {
     return particleCount;
 }
+
+void
+Scene::incrementParticleCount() {
+    ++particleCount;
+}
+
 unsigned int Scene::getPropertyDataSize() {
     return particleCount * sizeof(glm::vec4);
 }

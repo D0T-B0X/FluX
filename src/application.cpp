@@ -6,6 +6,45 @@ void
 App::run() {  
     setup();
 
+    // Force hardware VSync to cap rendering at monitor refresh rate (~16ms)
+    // This entirely replaces your manual RENDER_DT accumulator
+    glfwSwapInterval(1); 
+
+    while (!rEngine.shouldEnd()) {
+        activeScene.currTime = glfwGetTime();
+        if (activeScene.lastTime == 0.0f) activeScene.lastTime = activeScene.currTime;
+        activeScene.dt = activeScene.currTime - activeScene.lastTime;
+        activeScene.lastTime = activeScene.currTime;
+
+        // THE FIX: Clamp the maximum frame time to 250ms. 
+        // If the game lags worse than this, the simulation simply slows down 
+        // instead of falling into the Spiral of Death.
+        if (activeScene.dt > 0.25) {
+            activeScene.dt = 0.25; 
+        }
+
+        pEngine.timeAccumulator += activeScene.dt;
+
+        // Advance physics engine in strict fixed timesteps
+        while (pEngine.timeAccumulator >= PHYSICS_DT) {
+            pEngine.updateFrame();
+            pEngine.timeAccumulator -= PHYSICS_DT;
+        }
+
+        // Render exactly ONCE per frame using the most recent physics state.
+        // VSync handles the pacing automatically.
+        rEngine.renderFrame();
+    }
+
+    rEngine.cleanup();
+    pEngine.cleanup();
+}
+
+/*
+void
+App::run() {  
+    setup();
+
     while (!rEngine.shouldEnd()) {
         // Scene timing update
         activeScene.currTime = glfwGetTime();
@@ -13,6 +52,8 @@ App::run() {
         activeScene.dt = activeScene.currTime - activeScene.lastTime;
         activeScene.lastTime = activeScene.currTime;
         
+        std::cout << "Frame time: " << activeScene.dt << std::endl;
+
         pEngine.timeAccumulator += activeScene.dt;
         rEngine.timeAccumulator += activeScene.dt;
 
@@ -22,16 +63,24 @@ App::run() {
             pEngine.timeAccumulator -= PHYSICS_DT;
         }
 
+        double timeAfterPhysics = glfwGetTime();
+        double physicsTime = timeAfterPhysics - activeScene.lastTime;
+        std::cout << "Physics time: " << physicsTime << std::endl;
+
         // advance render engine if time step is 16ms
         while (rEngine.timeAccumulator >= RENDER_DT) {
             rEngine.renderFrame();
             rEngine.timeAccumulator -= RENDER_DT;
         }
+
+        double renderTime = glfwGetTime() - timeAfterPhysics;
+        std::cout << "Render time: " << renderTime << std::endl << std::endl;
     }
 
     rEngine.cleanup();
     pEngine.cleanup();
 }
+*/
 
 void 
 App::setup() {
@@ -51,9 +100,9 @@ App::setup() {
     float totalVolume = range * range * range;
     float massPerParticle = (RESTING_DENSITY * totalVolume) / totalParticleCount;
 
-    for (int x = 0; x < GRID_SIDE && activeScene.particleCount < maxParticles; ++x) {
-        for (int y = 0; y < GRID_SIDE && activeScene.particleCount < maxParticles; ++y) {
-            for (int z = 0; z < GRID_SIDE && activeScene.particleCount < maxParticles; ++z) {
+    for (int x = 0; x < GRID_SIDE && activeScene.getParticleCount() < maxParticles; ++x) {
+        for (int y = 0; y < GRID_SIDE && activeScene.getParticleCount() < maxParticles; ++y) {
+            for (int z = 0; z < GRID_SIDE && activeScene.getParticleCount() < maxParticles; ++z) {
 
                 // Calculate position
                 activeScene.particles.position_mass.push_back(glm::vec4(
@@ -90,34 +139,29 @@ App::setup() {
                     69.0f    // I'm immature :P
                 ));
 
-                ++activeScene.particleCount;
+                activeScene.incrementParticleCount();
             }
         }
     }
 
+    /*
     SurfaceInstanceData testSurface;
     
     testSurface = activeScene.createSurface(sNormal::Y_NORMAL, 10, -3.0f);
     testSurface.setScale(10.0f);
     testSurface.setPosition(glm::vec3(1.0f, 0.0f, 0.0f));
 
-    // activeScene.addSurface(testSurface);
+    activeScene.addSurface(testSurface);
+    */
 
     // Physics setup
-    pEngine.setGridUniforms();
-    pEngine.setDensityUniforms();
-    pEngine.setPressureUniforms();
-    pEngine.setForceUniforms();
     pEngine.setWorkGroupCount();    
-    pEngine.setOrderCheckUniforms();
-    pEngine.setPrefixScanUniforms();
-    pEngine.setGlobalOffsetSumUniforms();
-    pEngine.setScatterUniforms();
+    pEngine.uploadUinforms();
     pEngine.initSSBOs();
 
     // Render setup
     rEngine.uploadSphereMesh();
 
-    std::cout << "Currently rendering " << activeScene.particleCount << " particles" << std::endl;
+    std::cout << "Currently rendering " << activeScene.getParticleCount() << " particles" << std::endl;
 }
 

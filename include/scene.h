@@ -17,7 +17,6 @@ public:
     float          dt;
     float          currTime;
     float          lastTime;
-    unsigned int   particleCount;
 
     // ------ Simulation storage buffers ------
     Buffer         position_massSSBO;
@@ -44,9 +43,10 @@ public:
     void                                addSurface(SurfaceInstanceData surface);
     SurfaceInstanceData                 createSurface(sNormal normal, uint density, float distance);
     bool                                hasNoSpheres();
-    unsigned int                        getParticleCount();
 
     // -------- Physical data flow --------
+    int                                 getParticleCount();
+    void                                incrementParticleCount();
     unsigned int                        getPropertyDataSize();
     unsigned int                        getParticleCountSize();
     const void*                         getPositionMassData();
@@ -59,10 +59,13 @@ private:
     // Global sphere mesh
     Sphere3D                            globalSphere;
 
+    // Box mesh
     Surface3D                           surfaceMesh;   
 
     // Holds all surface instances in the sim
     std::vector<SurfaceInstanceData>    Surfaces; 
+
+    int                                 particleCount;
 };
 
 #endif
