@@ -27,11 +27,11 @@ inline constexpr float          MOUSE_SENSITIVITY        =    0.5f;
 inline constexpr float          MOVEMENT_SPEED           =    0.5f;
 
 // -------- Dimensions Constraints ----------
-inline constexpr int            GRID_SIDE                =    47;
+inline constexpr int            GRID_SIDE                =    20;
 inline constexpr float          MIN_BOUND                =   -1.0f;
 inline constexpr float          MAX_BOUND                =    1.0f;
 inline constexpr float          FLOOR_BOUNDARY           =   -0.1f;
-inline constexpr float          SPHERE_RADIUS            =    0.05f;
+inline constexpr float          SPHERE_RADIUS            =    0.015f;
 inline constexpr unsigned int   SPHERE_SUBDIVISIONS      =    6u;
 
 // -------- SPH constants (SI: kg, m, s) ----

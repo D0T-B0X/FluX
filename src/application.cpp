@@ -6,81 +6,34 @@ void
 App::run() {  
     setup();
 
-    // Force hardware VSync to cap rendering at monitor refresh rate (~16ms)
-    // This entirely replaces your manual RENDER_DT accumulator
     glfwSwapInterval(1); 
 
     while (!rEngine.shouldEnd()) {
+
+        // get real time difference between frames
         activeScene.currTime = glfwGetTime();
         if (activeScene.lastTime == 0.0f) activeScene.lastTime = activeScene.currTime;
         activeScene.dt = activeScene.currTime - activeScene.lastTime;
         activeScene.lastTime = activeScene.currTime;
 
-        // THE FIX: Clamp the maximum frame time to 250ms. 
-        // If the game lags worse than this, the simulation simply slows down 
-        // instead of falling into the Spiral of Death.
         if (activeScene.dt > 0.25) {
             activeScene.dt = 0.25; 
         }
 
         pEngine.timeAccumulator += activeScene.dt;
 
-        // Advance physics engine in strict fixed timesteps
+        // Advance physics engine in a pre-defined fixed timestep
         while (pEngine.timeAccumulator >= PHYSICS_DT) {
             pEngine.updateFrame();
             pEngine.timeAccumulator -= PHYSICS_DT;
         }
 
-        // Render exactly ONCE per frame using the most recent physics state.
-        // VSync handles the pacing automatically.
         rEngine.renderFrame();
     }
 
     rEngine.cleanup();
     pEngine.cleanup();
 }
-
-/*
-void
-App::run() {  
-    setup();
-
-    while (!rEngine.shouldEnd()) {
-        // Scene timing update
-        activeScene.currTime = glfwGetTime();
-        if (activeScene.lastTime == 0.0f) activeScene.lastTime = activeScene.currTime;
-        activeScene.dt = activeScene.currTime - activeScene.lastTime;
-        activeScene.lastTime = activeScene.currTime;
-        
-        std::cout << "Frame time: " << activeScene.dt << std::endl;
-
-        pEngine.timeAccumulator += activeScene.dt;
-        rEngine.timeAccumulator += activeScene.dt;
-
-        // advance physics engine if time step is 2ms
-        while (pEngine.timeAccumulator >= PHYSICS_DT) {
-            pEngine.updateFrame();
-            pEngine.timeAccumulator -= PHYSICS_DT;
-        }
-
-        double timeAfterPhysics = glfwGetTime();
-        double physicsTime = timeAfterPhysics - activeScene.lastTime;
-        std::cout << "Physics time: " << physicsTime << std::endl;
-
-        // advance render engine if time step is 16ms
-        while (rEngine.timeAccumulator >= RENDER_DT) {
-            rEngine.renderFrame();
-            rEngine.timeAccumulator -= RENDER_DT;
-        }
-
-        double renderTime = glfwGetTime() - timeAfterPhysics;
-        std::cout << "Render time: " << renderTime << std::endl << std::endl;
-    }
-
-    rEngine.cleanup();
-    pEngine.cleanup();
-}
-*/
 
 void 
 App::setup() {

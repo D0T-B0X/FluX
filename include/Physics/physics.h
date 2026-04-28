@@ -40,7 +40,6 @@ private:
     Shader          pressureShader;
     Shader          forceShader;
     Shader          gridHashShader;
-    Shader          orderCheckShader;
     Shader          prefixScanShader;
     Shader          globalOffsetSumShader;
     Shader          scatterShader;
@@ -49,13 +48,14 @@ private:
     int             workgroupCount;
 
     GLuint          timeQuery;
+    GLuint          iteration;
+    double          timeSum;
 
     // ------------- Uniform setup -------------
     void            setDensityUniforms();
     void            setPressureUniforms();
     void            setForceUniforms();
     void            setGridUniforms();
-    void            setOrderCheckUniforms();
     void            setPrefixScanUniforms();
     void            setGlobalOffsetSumUniforms();
     void            setScatterUniforms();

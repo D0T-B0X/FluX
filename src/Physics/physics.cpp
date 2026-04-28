@@ -4,11 +4,12 @@ Physics::Physics(Scene& activeScene)
     : 
     physicsScene(activeScene),
     timeAccumulator(0),
-    workgroupCount(0)
+    workgroupCount(0),
+    timeSum(0.0),
+    iteration(0)
 { 
     SMOOTHING_RADIUS = 0.0f;
     gridHashShader.load(GRID_CELL_CSHADER_PATH);
-    orderCheckShader.load(ORDER_CHECK_CSHADER_PATH);
     prefixScanShader.load(LOCAL_PREFIX_SCAN_CSHADER_PATH);
     globalOffsetSumShader.load(GLOBAL_OFFSET_SUM_CSHADER_PATH);
     scatterShader.load(SCATTER_CSHADER_PATH);
@@ -22,21 +23,24 @@ Physics::Physics(Scene& activeScene)
 void 
 Physics::updateFrame() {
 
+    performSpatialHashAndSort();
+
     glBeginQuery(GL_TIME_ELAPSED, timeQuery);
-    // performSpatialHashAndSort();
     computeSPHUpdates();
     glEndQuery(GL_TIME_ELAPSED);
 
     GLuint64 timeElapsedNs;
     glGetQueryObjectui64v(timeQuery, GL_QUERY_RESULT, &timeElapsedNs);
     double time_ms = timeElapsedNs / 1000000.0;
-    std::cout << "Per frame physics engine execution time: " << time_ms << " ms" << std::endl << std::endl; 
+    std::cout << "Per frame physics engine execution time: " << time_ms << " ms" << std::endl; 
 
+    if (iteration > 60) timeSum += time_ms;
+    iteration++;
 }
 
 void 
 Physics::cleanup() {
-
+    std::cout << "Average compute time: " << timeSum / (iteration - 60) << " ms" <<std::endl;
 }
 
 void
@@ -45,7 +49,6 @@ Physics::uploadUinforms() {
     setDensityUniforms();
     setPressureUniforms();
     setForceUniforms();
-    setOrderCheckUniforms();
     setPrefixScanUniforms();
     setGlobalOffsetSumUniforms();
     setScatterUniforms();
@@ -333,13 +336,6 @@ Physics::setForceUniforms() {
     // Floor boundary
     forceShader.setFloat("floorY", FLOOR_BOUNDARY);
     forceShader.setFloat("damping", DAMPING_COEFF);
-}
-
-void
-Physics::setOrderCheckUniforms() {
-    orderCheckShader.use();
-
-    orderCheckShader.setInt("totalParticleCount", physicsScene.getParticleCount());
 }
 
 void
