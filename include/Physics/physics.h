@@ -17,6 +17,7 @@ public:
     void            updateFrame();
     void            cleanup();
     void            performSpatialHashAndSort();
+    void            reorderParticleBuffers();
     void            computeSPHUpdates();
 
     // -------- Engine setup --------
@@ -36,13 +37,14 @@ public:
 
 private:
     Scene&          physicsScene;
-    Shader          densityShader;
-    Shader          pressureShader;
-    Shader          forceShader;
     Shader          gridHashShader;
     Shader          prefixScanShader;
     Shader          globalOffsetSumShader;
     Shader          scatterShader;
+    Shader          reorderBuffersShader;
+    Shader          densityShader;
+    Shader          pressureShader;
+    Shader          forceShader;
 
     float           SMOOTHING_RADIUS;
     int             workgroupCount;

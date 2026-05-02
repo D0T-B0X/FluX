@@ -13,6 +13,7 @@ Physics::Physics(Scene& activeScene)
     prefixScanShader.load(LOCAL_PREFIX_SCAN_CSHADER_PATH);
     globalOffsetSumShader.load(GLOBAL_OFFSET_SUM_CSHADER_PATH);
     scatterShader.load(SCATTER_CSHADER_PATH);
+    reorderBuffersShader.load(REORDER_BUFFER_CSHADER_PATH);
     densityShader.load(DENSITY_CSHADER_PATH);
     pressureShader.load(PRESSURE_CSHADER_PATH);
     forceShader.load(FORCE_CSHADER_PATH);
@@ -23,23 +24,25 @@ Physics::Physics(Scene& activeScene)
 void 
 Physics::updateFrame() {
 
-    performSpatialHashAndSort();
-
     glBeginQuery(GL_TIME_ELAPSED, timeQuery);
+    performSpatialHashAndSort();
+    reorderParticleBuffers();
     computeSPHUpdates();
     glEndQuery(GL_TIME_ELAPSED);
-
+    
+    
     GLuint64 timeElapsedNs;
     glGetQueryObjectui64v(timeQuery, GL_QUERY_RESULT, &timeElapsedNs);
     double time_ms = timeElapsedNs / 1000000.0;
     std::cout << "Per frame physics engine execution time: " << time_ms << " ms" << std::endl; 
 
-    if (iteration > 60) timeSum += time_ms;
+    if (iteration > 59) timeSum += time_ms;
     iteration++;
 }
 
 void 
 Physics::cleanup() {
+    // do not consider the first 60 iterations for average
     std::cout << "Average compute time: " << timeSum / (iteration - 60) << " ms" <<std::endl;
 }
 
@@ -82,28 +85,28 @@ void
 Physics::initSSBOs() {
 
     // -------- Position Mass buffer --------
-    physicsScene.position_massSSBO.bufferDataSize = physicsScene.getPropertyDataSize();
-    physicsScene.position_massSSBO.bufferData = physicsScene.getPositionMassData();
-    physicsScene.position_massSSBO.bufferBindBase = 0;
-    setupSSBO(physicsScene.position_massSSBO);
+    physicsScene.position_massInSSBO.bufferDataSize = physicsScene.getPropertyDataSize();
+    physicsScene.position_massInSSBO.bufferData = physicsScene.getPositionMassData();
+    physicsScene.position_massInSSBO.bufferBindBase = 0;
+    setupSSBO(physicsScene.position_massInSSBO);
 
     // -------- Velocity Density buffer --------
-    physicsScene.velocity_densitySSBO.bufferDataSize = physicsScene.getPropertyDataSize();
-    physicsScene.velocity_densitySSBO.bufferData = physicsScene.getVelocityDensityData();
-    physicsScene.velocity_densitySSBO.bufferBindBase = 1;
-    setupSSBO(physicsScene.velocity_densitySSBO);
+    physicsScene.velocity_densityInSSBO.bufferDataSize = physicsScene.getPropertyDataSize();
+    physicsScene.velocity_densityInSSBO.bufferData = physicsScene.getVelocityDensityData();
+    physicsScene.velocity_densityInSSBO.bufferBindBase = 1;
+    setupSSBO(physicsScene.velocity_densityInSSBO);
     
     // -------- Force Pressure buffer --------
-    physicsScene.force_pressureSSBO.bufferDataSize = physicsScene.getPropertyDataSize();
-    physicsScene.force_pressureSSBO.bufferData = physicsScene.getForcePressureData();
-    physicsScene.force_pressureSSBO.bufferBindBase = 2;
-    setupSSBO(physicsScene.force_pressureSSBO);
+    physicsScene.force_pressureInSSBO.bufferDataSize = physicsScene.getPropertyDataSize();
+    physicsScene.force_pressureInSSBO.bufferData = physicsScene.getForcePressureData();
+    physicsScene.force_pressureInSSBO.bufferBindBase = 2;
+    setupSSBO(physicsScene.force_pressureInSSBO);
 
     // -------- Color Paddig buffer --------
-    physicsScene.color_paddingSSBO.bufferDataSize = physicsScene.getPropertyDataSize();
-    physicsScene.color_paddingSSBO.bufferData = physicsScene.getColorPaddingData();
-    physicsScene.color_paddingSSBO.bufferBindBase = 3;
-    setupSSBO(physicsScene.color_paddingSSBO);
+    physicsScene.color_paddingInSSBO.bufferDataSize = physicsScene.getPropertyDataSize();
+    physicsScene.color_paddingInSSBO.bufferData = physicsScene.getColorPaddingData();
+    physicsScene.color_paddingInSSBO.bufferBindBase = 3;
+    setupSSBO(physicsScene.color_paddingInSSBO);
 
     // -------- First Cell Index buffer --------
     physicsScene.cell_index_oneSSBO.bufferDataSize = physicsScene.getParticleCountSize();
@@ -146,6 +149,30 @@ Physics::initSSBOs() {
     physicsScene.particle_index_twoSSBO.bufferData = 0;  // empty buffer
     physicsScene.particle_index_twoSSBO.bufferBindBase = 10;
     setupSSBO(physicsScene.particle_index_twoSSBO);   
+
+    // -------- Position Mass Out buffer --------
+    physicsScene.position_massOutSSBO.bufferDataSize = physicsScene.getPropertyDataSize();
+    physicsScene.position_massOutSSBO.bufferData = physicsScene.getPositionMassData();
+    physicsScene.position_massOutSSBO.bufferBindBase = 11;
+    setupSSBO(physicsScene.position_massOutSSBO);
+
+    // -------- Velocity Density Out buffer --------
+    physicsScene.velocity_densityOutSSBO.bufferDataSize = physicsScene.getPropertyDataSize();
+    physicsScene.velocity_densityOutSSBO.bufferData = physicsScene.getVelocityDensityData();
+    physicsScene.velocity_densityOutSSBO.bufferBindBase = 12;
+    setupSSBO(physicsScene.velocity_densityOutSSBO);
+    
+    // -------- Force Pressure Out buffer --------
+    physicsScene.force_pressureOutSSBO.bufferDataSize = physicsScene.getPropertyDataSize();
+    physicsScene.force_pressureOutSSBO.bufferData = physicsScene.getForcePressureData();
+    physicsScene.force_pressureOutSSBO.bufferBindBase = 13;
+    setupSSBO(physicsScene.force_pressureOutSSBO);
+
+    // -------- Color Paddig Out buffer --------
+    physicsScene.color_paddingOutSSBO.bufferDataSize = physicsScene.getPropertyDataSize();
+    physicsScene.color_paddingOutSSBO.bufferData = physicsScene.getColorPaddingData();
+    physicsScene.color_paddingOutSSBO.bufferBindBase = 14;
+    setupSSBO(physicsScene.color_paddingOutSSBO);
 }
 
 void 
@@ -220,39 +247,26 @@ Physics::performSpatialHashAndSort() {
         glDispatchCompute(workgroupCount, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-        if (swapBufferOneWithTwo) {
-            Buffer& inCellIndex = physicsScene.cell_index_oneSSBO;
-            Buffer& outCellIndex = physicsScene.cell_index_twoSSBO;
-            swapInputAndOutputBuffers(inCellIndex, outCellIndex);
+        Buffer& inCellIndex = physicsScene.cell_index_oneSSBO;
+        Buffer& outCellIndex = physicsScene.cell_index_twoSSBO;
+        swapInputAndOutputBuffers(inCellIndex, outCellIndex);
 
-            Buffer& inParticleIndex = physicsScene.particle_index_oneSSBO;
-            Buffer& outParticleIndex = physicsScene.particle_index_twoSSBO;
-            swapInputAndOutputBuffers(inParticleIndex, outParticleIndex);
-
-            swapBufferOneWithTwo = false;
-        } else {
-            Buffer& inCellIndex = physicsScene.cell_index_twoSSBO;
-            Buffer& outCellIndex = physicsScene.cell_index_oneSSBO;
-            swapInputAndOutputBuffers(inCellIndex, outCellIndex);
-
-            Buffer& inParticleIndex = physicsScene.particle_index_twoSSBO;
-            Buffer& outParticleIndex = physicsScene.particle_index_oneSSBO;
-            swapInputAndOutputBuffers(inParticleIndex, outParticleIndex);
-
-            swapBufferOneWithTwo = true;
-        }
+        Buffer& inParticleIndex = physicsScene.particle_index_oneSSBO;
+        Buffer& outParticleIndex = physicsScene.particle_index_twoSSBO;
+        swapInputAndOutputBuffers(inParticleIndex, outParticleIndex);
     }
 }
 
 void
-Physics::setWorkGroupCount() {
-    // Lacks proper error handling :/
-    if (physicsScene.getParticleCount() < 1) { workgroupCount = 1; return; }
+Physics::reorderParticleBuffers() {
+    reorderBuffersShader.use();
 
-    int PARTCILES_PROCESSED_PER_WORKGROUP = THREADS_PER_GROUP * 2;
-    workgroupCount = ceil((float)physicsScene.getParticleCount() / (float)PARTCILES_PROCESSED_PER_WORKGROUP);
+    glDispatchCompute(workgroupCount * 2, 1, 1);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-    std::cout << "Workgroup count: " << workgroupCount << std::endl;
+    swapInputAndOutputBuffers(physicsScene.position_massInSSBO, physicsScene.position_massOutSSBO);
+    swapInputAndOutputBuffers(physicsScene.velocity_densityInSSBO, physicsScene.velocity_densityOutSSBO);
+    swapInputAndOutputBuffers(physicsScene.color_paddingInSSBO, physicsScene.color_paddingOutSSBO);
 }
 
 void
@@ -273,6 +287,17 @@ Physics::computeSPHUpdates() {
     forceShader.setFloat("dt", PHYSICS_DT);
     glDispatchCompute(workgroupCount * 2, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
+}
+
+void
+Physics::setWorkGroupCount() {
+    // Lacks proper error handling :/
+    if (physicsScene.getParticleCount() < 1) { workgroupCount = 1; return; }
+
+    int PARTCILES_PROCESSED_PER_WORKGROUP = THREADS_PER_GROUP * 2;
+    workgroupCount = ceil((float)physicsScene.getParticleCount() / (float)PARTCILES_PROCESSED_PER_WORKGROUP);
+
+    std::cout << "Workgroup count: " << workgroupCount << std::endl;
 }
 
 void 

@@ -1,5 +1,4 @@
 #version 460 core
-#extension GL_KHR_shader_subgroup_basic : require
 
 #define CELL_INDEX_BUFFER_IN 4
 #define PARTICLE_INDEX_BUFFER_IN 5
@@ -47,7 +46,6 @@ main() {
     uint globalThreadIndex = gl_GlobalInvocationID.x;
     uint workGroupIndex = gl_WorkGroupID.x;
     uint localThreadIndex = gl_LocalInvocationIndex;
-    uint vramBlockSize = gl_SubgroupSize;
     uint totalParticleCountU = uint(totalParticleCount);
     uint workGroupCountU = uint(workGroupCount);
     uint shiftKeyU = uint(shift_key);

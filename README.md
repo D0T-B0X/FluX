@@ -1,159 +1,66 @@
 # FluX
 
-FluX is a GPU-based fluid simulation prototype written in C++ and OpenGL 4.6. It combines SPH-inspired compute passes with instanced sphere rendering for real-time visualization.
+FluX is a real-time smoothed particle hydrodynamics (SPH) fluid simulation built with OpenGL 4.6 compute shaders. The simulation runs entirely on the GPU: particles are spatially hashed and sorted, SPH densities and forces are computed, and the results are rendered as instanced spheres in a GLFW window.
 
-## Highlights
+This project is focused on the compute and rendering pipeline rather than a full application framework. It is a compact, GPU-first implementation that you can read and extend.
 
-- Modern OpenGL 4.6 pipeline using GLFW and GLAD
-- Compute-shader simulation passes for density, pressure, and force/integration
-- Uniform-grid cell hashing and radix-sort stages (order check + 4-way prefix scan)
-- Instanced rendering of particle spheres
-- Fixed-step simulation and rendering loops
-- Free-fly camera controls for scene inspection
+## What it does
+- Initializes a cubic particle volume based on `GRID_SIDE` in `include/settings.h`.
+- Advances physics using a fixed timestep (`PHYSICS_DT`) while the render loop runs independently.
+- Computes neighbor access using spatial hashing and a radix-sort pipeline on the GPU.
+- Runs SPH density, pressure, and force passes in compute shaders.
+- Renders each particle as an instanced sphere with basic lighting.
 
-## Architecture Overview
+## How the simulation is organized
+- `Scene` owns the particle data and the shader storage buffers (SSBOs).
+- `Physics` manages the compute shaders and the dispatch pipeline:
+	- Hash grid cell indices.
+	- Radix-sort particle indices (prefix scan, global offset sum, scatter).
+	- Compute SPH density, pressure, and forces.
+- `Renderer` manages the window, camera input, and draws instanced spheres each frame.
 
-FluX is organized into three primary runtime components:
-
-- Application layer: Initializes scene state, configures simulation parameters, and runs fixed-step loops.
-- Physics engine: Owns compute shaders, uploads SSBOs, computes cell hashes, and executes SPH passes.
-- Renderer: Creates window/context, uploads sphere mesh data, and draws particles each render tick.
-
-At startup, the app generates an initial particle block inside a bounded volume and uploads particle attributes to shader storage buffer objects (SSBOs).
-
-## Simulation Pipeline
-
-Each physics update executes the following high-level flow:
-
-1. Grid build pass
-2. Radix order-check pass (early-exit test)
-3. Radix 4-way prefix-scan + in-block shuffle pass (2 bits per pass)
-4. SPH density pass
-5. SPH pressure pass
-6. SPH force/integration pass
-
-Particle attributes are stored in SSBOs:
-
-- position_mass
-- velocity_density
-- force_pressure
-- color_padding
-- cell_index
-- particle_index
-- abort_flag
-- global_offset
-
-Pressure uses a Tait-style equation of state.
+Shader sources are in `shaders/Compute` and `shaders/Render`. The build generates a `config.h` that bakes absolute shader paths, so a reconfigure is needed if you move the repository.
 
 ## Controls
-
-- W / S: Move forward and backward
-- A / D: Strafe left and right
-- Space / Left Ctrl: Move up and down
-- Mouse: Look around
-- Esc: Exit
+- Mouse: look around (cursor is captured)
+- W/A/S/D: move camera
+- Space: move up
+- Left Ctrl: move down
+- Esc: close window
 
 ## Requirements
-
-- Linux
-- OpenGL 4.6-capable GPU and driver
 - C++20 compiler
 - CMake 4.1+
-- GLFW3
-- pkg-config
+- OpenGL 4.6 capable GPU/driver (GLSL 4.60)
+- GLFW3 development package and pkg-config
 
-## Build and Run
+GLAD and GLM are included in this repository, so you do not need to install them separately.
 
+## Build
 ```bash
 cmake -S . -B build
-cmake --build build -j"$(nproc)"
+cmake --build build -j
+```
+
+## Run
+```bash
 ./build/FluX
 ```
 
+Note: shader paths are baked into build-time configuration. If you move the repo or shaders, re-run CMake so the generated config stays valid.
+
 ## Configuration
+Simulation constants (grid size, time step, SPH constants, gravity, viscosity) are defined in `include/settings.h`. Adjust these to trade off quality vs performance.
 
-Primary runtime constants are defined in include/settings.h.
+## Project layout
+- `include/`: public headers (scene, renderer, physics, settings)
+- `src/`: engine implementation and entry point
+- `shaders/`: compute and render shaders
+- `build/`: out-of-source build artifacts (generated)
 
-Current defaults:
-
-- Window: 1920 x 1200
-- Grid side length: 16
-- Initial particle count: 16^3 = 4096
-- Physics timestep: 0.0020 s
-- Render timestep: 0.0166 s
-- Rest density: 1000.0 kg/m^3
-- Gravity: (0.0, -9.81, 0.0)
-- Compute local size: 256 threads
-
-Shader source paths are generated at configure time through config.h.
-
-## Current Status
-
-Implemented:
-
-- Core simulation and rendering loop
-- SPH density/pressure/force passes
-- Particle floor collision response
-- Cell hash generation
-- Radix order checking
-- Radix 4-way prefix scan with local in-block reordering
-- Instanced sphere rendering
-
-In progress or partial:
-
-- Cross-workgroup radix positioning/merge validation for large particle counts
-- End-to-end sorted-neighbor usage in SPH kernels
-- Surface rendering path
-- Event-driven runtime parameter updates
-
-## Limitations
-
-- SPH compute shaders currently perform full particle-pair loops, which are expensive at larger particle counts.
-- In a partially filled last radix workgroup, invalid lanes must be masked out of the counting mask; otherwise digit counts are inflated.
-- Event handling scaffolding exists but is not yet integrated as a complete runtime system.
-- Surface generation and rendering are present as scaffolding and are not part of the active rendering flow.
-
-## Repository Layout
-
-```text
-FluX/
-  include/
-    Physics/
-    Renderer/
-    Mesh/
-    Object/
-    util/
-    application.h
-    scene.h
-    settings.h
-  src/
-    Physics/
-    Renderer/
-    Mesh/
-    util/
-    application.cpp
-    scene.cpp
-    main.cpp
-    glad.c
-  shaders/
-    SPH/
-      density_pass.comp
-      pressure_pass.comp
-      force_pass.comp
-    SpatialHashing/
-      hash_grid_cell_index.comp
-      RadixSort/
-        order_check.comp
-        prefix_scan.comp
-    Render/
-      vSphere.glsl
-      fSphere.glsl
-      vSurface.glsl
-      fSurface.glsl
-  CMakeLists.txt
-  config.h.in
-```
+## Notes and limitations
+- The radix-sort global offset phase is designed around a fixed maximum of workgroups; very large particle counts may require adjustments in the compute pipeline.
+- The physics loop prints per-frame compute timings and an average once the app exits.
 
 ## License
-
-MIT
+MIT. See [LICENSE](LICENSE).

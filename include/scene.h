@@ -19,10 +19,10 @@ public:
     float          lastTime;
 
     // ------ Simulation storage buffers ------
-    Buffer         position_massSSBO;
-    Buffer         velocity_densitySSBO;
-    Buffer         force_pressureSSBO;
-    Buffer         color_paddingSSBO;
+    Buffer         position_massInSSBO;
+    Buffer         velocity_densityInSSBO;
+    Buffer         force_pressureInSSBO;
+    Buffer         color_paddingInSSBO;
     Buffer         cell_index_oneSSBO;
     Buffer         particle_index_oneSSBO;
     Buffer         abortFlag_buffSSBO;    
@@ -30,6 +30,10 @@ public:
     Buffer         blockSum_buffSSBO;
     Buffer         cell_index_twoSSBO;
     Buffer         particle_index_twoSSBO;
+    Buffer         position_massOutSSBO;
+    Buffer         velocity_densityOutSSBO;
+    Buffer         force_pressureOutSSBO;
+    Buffer         color_paddingOutSSBO;
 
     // Holds all sphere data in the simulation
     Particles                           particles;

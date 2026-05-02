@@ -1,0 +1,41 @@
+#version 460 core
+
+#define THREADS_PER_GROUP 256
+#define PARTICLE_COUNT 512
+
+#define POSITION_MASS_IN_BUFFER 0
+#define VELOCITY_DENSITY_IN_BUFFER 1
+#define FORCE_PRESSURE_IN_BUFFER 2
+#define COLOR_PADDING_IN_BUFFER 3
+#define PARTICLE_INDEX_BUFFER 5
+#define POSITION_MASS_OUT_BUFFER 11
+#define VELOCITY_DENSITY_OUT_BUFFER 12 
+#define FORCE_PRESSURE_OUT_BUFFER 13
+#define COLOR_PADDING_OUT_BUFFER 14
+
+layout (local_size_x = THREADS_PER_GROUP, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, binding = POSITION_MASS_IN_BUFFER) buffer PosMassBufferIn { vec4 positionMassBuffIn[]; };
+layout(std430, binding = VELOCITY_DENSITY_IN_BUFFER) buffer VelDenBufferIn { vec4 velocityDensityBuffIn[]; };
+layout(std430, binding = FORCE_PRESSURE_IN_BUFFER) buffer ForcePresBufferIn { vec4 forcePressureBuffIn[]; };
+layout(std430, binding = COLOR_PADDING_IN_BUFFER) buffer ColorPaddingIn { vec4 colorPaddingBuffIn[]; };
+layout(std430, binding = PARTICLE_INDEX_BUFFER) buffer ParticleIndexBuff { uint particleIndexBuff[]; };
+layout(std430, binding = POSITION_MASS_OUT_BUFFER) buffer PosMassBufferOut { vec4 positionMassBuffOut[]; };
+layout(std430, binding = VELOCITY_DENSITY_OUT_BUFFER) buffer VelDenBufferOut { vec4 velocityDensityBuffOut[]; };
+layout(std430, binding = FORCE_PRESSURE_OUT_BUFFER) buffer ForcePresBufferOut { vec4 forcePressureBuffOut[]; };
+layout(std430, binding = COLOR_PADDING_OUT_BUFFER) buffer ColorPaddingOut { vec4 colorPaddingBuffOut[]; };
+
+uniform int totalParticleCount;
+
+void
+main() {
+    uint globalThreadIndex = gl_GlobalInvocationID.x;
+
+    if (globalThreadIndex >= totalParticleCount) return;
+
+    uint originalIndex = particleIndexBuff[globalThreadIndex];
+    positionMassBuffOut[globalThreadIndex] = positionMassBuffIn[originalIndex];
+    velocityDensityBuffOut[globalThreadIndex] = velocityDensityBuffIn[originalIndex];
+    forcePressureBuffOut[globalThreadIndex] = forcePressureBuffIn[originalIndex];
+    colorPaddingBuffOut[globalThreadIndex] = colorPaddingBuffIn[originalIndex];
+}
