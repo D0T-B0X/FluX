@@ -17,7 +17,7 @@
  subsection 39.2.3 'Avoiding Bank Conflicts'
 */ 
 #define CONFLICT_FREE_OFFSET(n) ((n) >> LOG_NUM_BANKS) 
-#define CONFLICT_FREE_INDEX(n) (CONFLICT_FREE_OFFSET(n))
+#define CONFLICT_FREE_INDEX(n) (CONFLICT_FREE_OFFSET(n) + n)
 
 layout(local_size_x = THREADS_PER_GROUP, local_size_y = 1, local_size_z = 1) in;
 

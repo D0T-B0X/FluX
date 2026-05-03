@@ -21,23 +21,24 @@ inline const unsigned int       SCR_WIDTH                =    1920u;
 inline const unsigned int       SCR_HEIGHT               =    1080u;
 
 // -------- Dimensions Constraints ----------
-inline constexpr int            GRID_SIDE                =    16;
-inline constexpr float          MIN_BOUND                =   -2.0f;
-inline constexpr float          MAX_BOUND                =    2.0f;
-inline constexpr float          FLOOR_BOUNDARY           =    MIN_BOUND - 0.5f;
-inline constexpr float          SPHERE_RADIUS            =    0.08f;
+inline constexpr int            GRID_SIDE                =    20;
+inline constexpr float          MIN_BOUND                =   -0.05f;
+inline constexpr float          MAX_BOUND                =    0.05f;
+inline constexpr float          FLOOR_BOUNDARY           =    MIN_BOUND - 0.05f;
+inline constexpr float          SPHERE_RADIUS            =    0.002f;
 inline constexpr unsigned int   SPHERE_SUBDIVISIONS      =    6u;
 
 // -------- Camera Settings -----------------
-inline constexpr glm::vec3      CAMERA_POSITION          =    glm::vec3(0.0f, MAX_BOUND - 2.0, MAX_BOUND + 3.0);
+inline constexpr glm::vec3      CAMERA_POSITION          =    glm::vec3(0.0f, MAX_BOUND - 0.2, MAX_BOUND + 0.3);
 inline constexpr float          FOV                      =    90.0f;
 inline constexpr float          MOUSE_SENSITIVITY        =    0.5f;   
-inline constexpr float          MOVEMENT_SPEED           =    1.0f;
+inline constexpr float          MOVEMENT_SPEED           =    0.2f;
 
 // -------- SPH constants (SI: kg, m, s) ----
-inline constexpr float          K                        =    14300.0f;     // Pa  (B = ρ₀c²/γ, c ≈ 60 m/s)
-inline constexpr float          RESTING_DENSITY          =    1000.0f;      // kg/m³ (water)
+inline constexpr float          SPEED_OF_SOUND           =    60.0f;                                                           // c = 60 m/s
+inline constexpr float          RESTING_DENSITY          =    1000.0f;                                                         // kg/m³ (water)
 inline constexpr int            GAMMA                    =    7;  
+inline constexpr float          K                        =    (RESTING_DENSITY * (SPEED_OF_SOUND*SPEED_OF_SOUND) / GAMMA);     // Pa  (B = ρ₀c²/γ)
 
 // -------- TIME-STEPS ----------------------
 inline constexpr float          PHYSICS_DT               =    0.0020f;

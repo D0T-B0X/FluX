@@ -1,9 +1,9 @@
 #version 460 core
 
 layout (location = 0) in vec3 aPos;
-layout(std430, binding = 0) buffer PosMass { vec4 position_mass[]; };
-layout(std430, binding = 1) buffer VelDens { vec4 velocity_density[]; };
-layout(std430, binding = 3) buffer ColPad  { vec4 color_padding[]; };
+layout(std430, binding = 11) buffer PosMass { vec4 position_mass[]; };
+layout(std430, binding = 12) buffer VelDens { vec4 velocity_density[]; };
+layout(std430, binding = 14) buffer ColPad  { vec4 color_padding[]; };
 
 out vec3  inColor;
 out vec3  normalPos;

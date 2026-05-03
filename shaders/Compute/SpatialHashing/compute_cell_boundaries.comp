@@ -27,7 +27,7 @@ main() {
         cellIndexStartBuff[currentParticleCell] = globalThreadIndex;
 
         if (globalThreadIndex > 0) {
-            cellIndexEndBuff[currentParticleCell] = globalThreadIndex - 1; 
+            cellIndexEndBuff[previousParticleCell] = globalThreadIndex; 
         }
     }
 

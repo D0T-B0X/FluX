@@ -2,8 +2,8 @@
 
 layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
-layout(std430, binding = 1) readonly buffer VelBuffer { vec4 velocity_density[]; };
-layout(std430, binding = 2) buffer ForceBuffer { vec4 force_pressure[]; };
+layout(std430, binding = 12) readonly buffer VelBuffer { vec4 velocity_density[]; };
+layout(std430, binding = 13) buffer ForceBuffer { vec4 force_pressure[]; };
 
 // ------- Fluid constants -------
 uniform float k;
@@ -19,8 +19,18 @@ main() {
 
     if (i >= numParticles) return;
 
-    // Pressure calculation
-    float d = velocity_density[i].w;
-    float p = k * (pow((d * restingRhoInv), gamma) - 1);
+    /** 
+     * Pressure calculation
+     * p = (ρ₀ cs²/γ) × [(ρ/ρ₀)^γ - 1] where γ = 7 (for water)
+     *
+     * (ρ₀ cs²/γ) is a stiffness constant k
+     */ 
+    float rho = velocity_density[i].w;
+
+    // safety guard to prevent pow() computation errors
+    float rhoRatio = max(rho * restingRhoInv, 1e-6);
+    float rhoRatioWithGamma = pow(rhoRatio, gamma);
+    float p = k * (rhoRatioWithGamma - 1);
+
     force_pressure[i].w = p;
 }

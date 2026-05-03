@@ -38,6 +38,7 @@ public:
     void                cleanup();
 
     float               timeAccumulator;
+    void debugReadback();
 
 private:
     Scene&              physicsScene;

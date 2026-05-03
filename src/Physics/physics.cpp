@@ -25,19 +25,23 @@ Physics::Physics(Scene& activeScene)
 void 
 Physics::updateFrame() {
     
+    glFinish();
+
     glBeginQuery(GL_TIME_ELAPSED, timeQuery);
     refreshBoundarySSBOs();
     performSpatialHashAndSort();
     reorderParticleBuffers();
     computeCellBoundaries();
     computeSPHUpdates();
+
+    glFinish();
     glEndQuery(GL_TIME_ELAPSED);
     
     
     GLuint64 timeElapsedNs;
     glGetQueryObjectui64v(timeQuery, GL_QUERY_RESULT, &timeElapsedNs);
     double time_ms = timeElapsedNs / 1000000.0;
-    std::cout << "Per frame physics engine execution time: " << time_ms << " ms" << std::endl; 
+    // std::cout << "Per frame physics engine execution time: " << time_ms << " ms" << std::endl; 
 
     if (iteration > 59) timeSum += time_ms;
     iteration++;
@@ -56,6 +60,8 @@ Physics::uploadUinforms() {
     setPrefixScanUniforms();
     setGlobalOffsetSumUniforms();
     setScatterUniforms();
+    setReorderBuffersUniforms();
+    setComputeCellBoundariesUniforms();
 
     setDensityUniforms();
     setPressureUniforms();
@@ -65,19 +71,19 @@ Physics::uploadUinforms() {
 void 
 Physics::setupSSBO(Buffer& b) {
 
-    glGenBuffers(1, &b.bufferID);
+    glCreateBuffers(1, &b.bufferID);
 
-    glBindBuffer(
-        GL_SHADER_STORAGE_BUFFER,
-        b.bufferID
-    );
-
-    glBufferData(
-        GL_SHADER_STORAGE_BUFFER,
+    glNamedBufferData(
+        b.bufferID,
         b.bufferDataSize,
         b.bufferData,
         GL_DYNAMIC_DRAW
     );
+
+    GLenum err = glGetError();
+    if (err != GL_NO_ERROR) {
+        std::cout << "glNamedBufferData error: " << err << " for binding " << b.bufferBindBase << std::endl;
+    }
 
     glBindBufferBase(
         GL_SHADER_STORAGE_BUFFER,
@@ -86,30 +92,70 @@ Physics::setupSSBO(Buffer& b) {
     );
 }
 
+void Physics::debugReadback() {
+    glFinish();
+    
+    GLint size = 0;
+    glGetNamedBufferParameteriv(
+        physicsScene.position_massOutSSBO.bufferID, 
+        GL_BUFFER_SIZE, 
+        &size
+    );
+    std::cout << "Buffer size: " << size << " bytes" << std::endl;
+    
+    if (size == 0) {
+        std::cout << "Buffer is empty!" << std::endl;
+        return;
+    }
+
+    void* data = glMapNamedBuffer(
+        physicsScene.position_massOutSSBO.bufferID, 
+        GL_READ_ONLY
+    );
+
+    if (!data) {
+        std::cout << "Map failed! GL error: " << glGetError() << std::endl;
+        return;
+    }
+
+    float* floats = (float*)data;
+    int count = std::min(5, physicsScene.getParticleCount());
+    for (int i = 0; i < count; i++) {
+        int base = i * 4;
+        std::cout << "particle[" << i << "] pos=("
+                  << floats[base + 0] << ", "
+                  << floats[base + 1] << ", "
+                  << floats[base + 2] << ") mass="
+                  << floats[base + 3] << std::endl;
+    }
+
+    glUnmapNamedBuffer(physicsScene.position_massOutSSBO.bufferID);
+}
+
 void
 Physics::initSSBOs() {
 
     // -------- Position Mass buffer --------
     physicsScene.position_massInSSBO.bufferDataSize = physicsScene.getPropertyDataSize();
-    physicsScene.position_massInSSBO.bufferData = physicsScene.getPositionMassData();
+    physicsScene.position_massInSSBO.bufferData = NULL;
     physicsScene.position_massInSSBO.bufferBindBase = 0;
     setupSSBO(physicsScene.position_massInSSBO);
 
     // -------- Velocity Density buffer --------
     physicsScene.velocity_densityInSSBO.bufferDataSize = physicsScene.getPropertyDataSize();
-    physicsScene.velocity_densityInSSBO.bufferData = physicsScene.getVelocityDensityData();
+    physicsScene.velocity_densityInSSBO.bufferData = NULL;
     physicsScene.velocity_densityInSSBO.bufferBindBase = 1;
     setupSSBO(physicsScene.velocity_densityInSSBO);
     
     // -------- Force Pressure buffer --------
     physicsScene.force_pressureInSSBO.bufferDataSize = physicsScene.getPropertyDataSize();
-    physicsScene.force_pressureInSSBO.bufferData = physicsScene.getForcePressureData();
+    physicsScene.force_pressureInSSBO.bufferData = NULL;
     physicsScene.force_pressureInSSBO.bufferBindBase = 2;
     setupSSBO(physicsScene.force_pressureInSSBO);
 
     // -------- Color Paddig buffer --------
     physicsScene.color_paddingInSSBO.bufferDataSize = physicsScene.getPropertyDataSize();
-    physicsScene.color_paddingInSSBO.bufferData = physicsScene.getColorPaddingData();
+    physicsScene.color_paddingInSSBO.bufferData = NULL;
     physicsScene.color_paddingInSSBO.bufferBindBase = 3;
     setupSSBO(physicsScene.color_paddingInSSBO);
 
@@ -272,18 +318,68 @@ Physics::performSpatialHashAndSort() {
         Buffer& outParticleIndex = physicsScene.particle_index_twoSSBO;
         swapInputAndOutputBuffers(inParticleIndex, outParticleIndex);
     }
+
+    glFinish();
+    void* data = glMapNamedBuffer(physicsScene.cell_index_oneSSBO.bufferID, GL_READ_ONLY);
+    GLuint* indices = (GLuint*)data;
+
+    GLuint minCell = UINT_MAX, maxCell = 0;
+    int validCount = 0;
+    int gridSize = ceil((MAX_BOUND - MIN_BOUND) / SMOOTHING_RADIUS);
+    int maxValidCell = gridSize * gridSize * gridSize;
+
+    for (int i = 0; i < physicsScene.getParticleCount(); i++) {
+        if (indices[i] < (GLuint)maxValidCell) validCount++;
+        minCell = glm::min(minCell, indices[i]);
+        maxCell = glm::max(maxCell, indices[i]);
+    }
+    std::cout << "cellIndex range: " << minCell << " to " << maxCell 
+            << " valid: " << validCount << "/" << physicsScene.getParticleCount()
+            << " maxValidCell: " << maxValidCell << std::endl;
+    glUnmapNamedBuffer(physicsScene.cell_index_oneSSBO.bufferID);
 }
 
 void
 Physics::reorderParticleBuffers() {
+
+    // copy OUT -> IN at start of frame
+    glCopyNamedBufferSubData(
+        physicsScene.position_massOutSSBO.bufferID,
+        physicsScene.position_massInSSBO.bufferID,
+        0,
+        0,
+        physicsScene.getPropertyDataSize()
+    );
+
+    glCopyNamedBufferSubData(
+        physicsScene.velocity_densityOutSSBO.bufferID,
+        physicsScene.velocity_densityInSSBO.bufferID,   
+        0, 
+        0, 
+        physicsScene.getPropertyDataSize()
+    );
+
+    glCopyNamedBufferSubData(
+        physicsScene.force_pressureOutSSBO.bufferID,
+        physicsScene.force_pressureInSSBO.bufferID,   
+        0, 
+        0, 
+        physicsScene.getPropertyDataSize()
+    );
+
+    glCopyNamedBufferSubData(
+        physicsScene.color_paddingOutSSBO.bufferID,
+        physicsScene.color_paddingInSSBO.bufferID,   
+        0, 
+        0, 
+        physicsScene.getPropertyDataSize()
+    );
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
     reorderBuffersShader.use();
 
     glDispatchCompute(workgroupCount * 2, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-    swapInputAndOutputBuffers(physicsScene.position_massInSSBO, physicsScene.position_massOutSSBO);
-    swapInputAndOutputBuffers(physicsScene.velocity_densityInSSBO, physicsScene.velocity_densityOutSSBO);
-    swapInputAndOutputBuffers(physicsScene.color_paddingInSSBO, physicsScene.color_paddingOutSSBO);
 }
 
 void
@@ -297,10 +393,20 @@ Physics::computeCellBoundaries() {
 void
 Physics::computeSPHUpdates() {
 
+    glFinish();
+
     // Density calculations pass
     densityShader.use();
     glDispatchCompute(workgroupCount * 2, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+    glFinish();
+    void* data = glMapNamedBuffer(physicsScene.velocity_densityOutSSBO.bufferID, GL_READ_ONLY);
+    float* floats = (float*)data;
+    for (int i = 0; i < 5; i++) {
+        std::cout << "density[" << i << "] = " << floats[i * 4 + 3] << std::endl;
+    }
+    glUnmapNamedBuffer(physicsScene.velocity_densityOutSSBO.bufferID);
 
     // Pressure calculations pass
     pressureShader.use();
@@ -392,10 +498,12 @@ Physics::setDensityUniforms() {
     float polySix = 315 / (64 * M_PI * pow(SMOOTHING_RADIUS, 9));
     densityShader.setFloat("poly6", polySix);
 
-    densityShader.setInt("numParticles", physicsScene.getParticleCount());
+    int gridCountOnSide = glm::ceil((MAX_BOUND - MIN_BOUND) / SMOOTHING_RADIUS);
+    densityShader.setInt("totalParticleCount", physicsScene.getParticleCount());
     densityShader.setFloat("cellSize", SMOOTHING_RADIUS); 
-    densityShader.setInt("gridSize", glm::ceil((MAX_BOUND - MIN_BOUND) / SMOOTHING_RADIUS));
-    densityShader.setVec3("gridMin", glm::vec3(MIN_BOUND, MIN_BOUND, MIN_BOUND));
+    densityShader.setInt("gridSize", gridCountOnSide);
+    densityShader.setFloat("minBound", MIN_BOUND);
+    densityShader.setFloat("maxBound", MAX_BOUND);
 }
 
 void 
@@ -405,6 +513,12 @@ Physics::setPressureUniforms() {
     pressureShader.setInt("numParticles", physicsScene.getParticleCount());
     // Stiffness coefficient
     pressureShader.setFloat("k", K);
+    // Speed of sound
+    pressureShader.setFloat("speedOfSound", SPEED_OF_SOUND);
+    // Inverse of Gamma for faster calculations
+    pressureShader.setFloat("gammaInv", 1 / (float)GAMMA);
+    // Resting density of the fluid
+    pressureShader.setFloat("restingRho", RESTING_DENSITY);
     // Inverse of the resting density of the fluid
     pressureShader.setFloat("restingRhoInv", 1 / RESTING_DENSITY);
     // Gamma for Tait's equation
@@ -416,6 +530,8 @@ Physics::setForceUniforms() {
     forceShader.use();
 
     forceShader.setInt("numParticles", physicsScene.getParticleCount());
+
+    int gridCountOnSide = glm::ceil((MAX_BOUND - MIN_BOUND) / SMOOTHING_RADIUS);
 
     forceShader.setFloat("h", SMOOTHING_RADIUS);
     forceShader.setVec3("GRAVITY_C", GRAV_CONSTANT);         // m/s²
@@ -435,6 +551,7 @@ Physics::setForceUniforms() {
     forceShader.setFloat("minBound", MIN_BOUND);
     forceShader.setFloat("maxBound", MAX_BOUND);
     forceShader.setFloat("damping", DAMPING_COEFF);
+    forceShader.setInt("gridSize", gridCountOnSide);
 }
 
 int 
@@ -497,31 +614,21 @@ void
 Physics::refreshBoundarySSBOs() {
     GLuint refreshValue = 0xFFFFFFFF;
 
-    glBindBuffer(
-        GL_SHADER_STORAGE_BUFFER,
-        physicsScene.cell_boundary_startSSBO.bufferID
-    );
-
-    glClearBufferData(
-        GL_SHADER_STORAGE_BUFFER,
+    glClearNamedBufferData(
+        physicsScene.cell_boundary_startSSBO.bufferID,
         GL_R32UI,
         GL_RED_INTEGER,
         GL_UNSIGNED_INT,
         &refreshValue
     );
 
-    glBindBuffer(
-        GL_SHADER_STORAGE_BUFFER,
-        physicsScene.cell_boundary_endSSBO.bufferID
-    );
-
-    glClearBufferData(
-        GL_SHADER_STORAGE_BUFFER,
+    glClearNamedBufferData(
+        physicsScene.cell_boundary_endSSBO.bufferID,
         GL_R32UI,
         GL_RED_INTEGER,
         GL_UNSIGNED_INT,
         &refreshValue
     );
 
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT);
 }

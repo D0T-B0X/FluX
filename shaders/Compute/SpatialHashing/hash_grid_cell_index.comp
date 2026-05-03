@@ -1,6 +1,6 @@
 #version 460 core
 
-#define POSITION_BUFFER 0
+#define POSITION_BUFFER 11
 #define CELL_INDEX_BUFFER 4
 #define PARTICLE_ID_BUFFER 5
 

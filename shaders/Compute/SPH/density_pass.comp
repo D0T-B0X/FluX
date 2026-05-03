@@ -2,23 +2,28 @@
 
 #define THREADS_PER_GROUP 256
 
-#define POSITION_MASS_BUFFER 0
-#define VELOCITY_DENSITY_BUFFER 1
+#define POSITION_MASS_BUFFER 11
+#define VELOCITY_DENSITY_BUFFER 12
+#define CELL_INDEX_START_BUFFER 15
+#define CELL_INDEX_END_BUFFER 16
 
 layout(local_size_x = THREADS_PER_GROUP, local_size_y = 1, local_size_z = 1) in;
 
 layout(std430, binding = POSITION_MASS_BUFFER) readonly buffer PosBuffer { vec4 position_mass[]; };
 layout(std430, binding = VELOCITY_DENSITY_BUFFER) buffer VelBuffer { vec4 velocity_density[]; };
+layout(std430, binding = CELL_INDEX_START_BUFFER) buffer CellIndexStartBuff { uint cellIndexStartBuff[]; };
+layout(std430, binding = CELL_INDEX_END_BUFFER) buffer CellIndexEndBuff { uint cellIndexEndBuff[]; };
 
 // ------- SPH constants -------
 uniform float h2;
 uniform float poly6;
 
 // ------- Dimensional constraints -------
-uniform int numParticles;
+uniform int totalParticleCount;
 uniform float cellSize;
+uniform float minBound;
+uniform float maxBound;
 uniform int gridSize;
-uniform vec3 gridMin;
 
 
 /* 
@@ -26,26 +31,61 @@ uniform vec3 gridMin;
 */
 float
 W_poly6(float r2) {
-    if (r2 >= h2) return 0.0;
-    float diff = h2 - r2;
-    return poly6 * diff*diff*diff;
+    float dist = h2 - r2;
+    return poly6 * dist*dist*dist;
+}
+
+ivec3 worldToCell(vec3 pos) {
+    return clamp(
+        ivec3(floor((pos - minBound) / cellSize)), // cell size is equal to the smoothing radius
+        ivec3(0),
+        ivec3(gridSize - 1)
+    );
+}
+
+int cellIndex(ivec3 coord) {
+    return (coord.z * gridSize + coord.y) * gridSize + coord.x;
 }
 
 void 
 main() {
     uint i = gl_GlobalInvocationID.x;
 
-    if (i >= numParticles) return;
+    if (i >= totalParticleCount) return;
 
-    // Density calculation
-    float my_density = 0.0;
-    for (int j = 0; j < numParticles; ++j) {
-        vec3 r = position_mass[i].xyz - position_mass[j].xyz;
-        float r2 = dot(r, r);
-        if (r2 < h2) {
-            my_density += position_mass[j].w * W_poly6(r2);
+    vec3 currentParticlePosition = position_mass[i].xyz;
+    ivec3 centerCell = worldToCell(currentParticlePosition);
+
+    float currentParticleDensity = 0.0;
+    for(int cx = -1; cx <= 1; ++cx) 
+    for(int cy = -1; cy <= 1; ++cy) 
+    for(int cz = -1; cz <= 1; ++cz) {
+        ivec3 neighbourCell = centerCell + ivec3(cx, cy, cz);
+
+        if (any(lessThan(neighbourCell, ivec3(0))) || 
+            any(greaterThanEqual(neighbourCell, ivec3(gridSize)))) continue;
+
+        int flatCellIndex = cellIndex(neighbourCell);
+        uint startIndex = cellIndexStartBuff[flatCellIndex];
+        uint endIndex = cellIndexEndBuff[flatCellIndex];
+
+        if (startIndex == 0xFFFFFFFF) continue;
+
+        /** 
+        * Density calculation
+        * 
+        * ρᵢ = Σⱼ mⱼ · W(|rᵢ - rⱼ|, h) where |rᵢ - rⱼ|² ≤ h²
+        */ 
+        for(uint j = startIndex; j < endIndex; ++j) {
+            float neighbourMass = position_mass[j].w;
+            vec3 r = position_mass[i].xyz - position_mass[j].xyz;
+            
+            float r2 = dot(r, r);
+            if (r2 < h2) {
+                currentParticleDensity += neighbourMass * W_poly6(r2);
+            }
         }
-    }
+    } 
 
-    velocity_density[i].w = my_density;
+    velocity_density[i].w = currentParticleDensity;
 }

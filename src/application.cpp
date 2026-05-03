@@ -7,8 +7,9 @@ App::run() {
     setup();
 
     glfwSwapInterval(1); 
-
+    int check = 0;
     while (!rEngine.shouldEnd()) {
+        
 
         // get real time difference between frames
         activeScene.currTime = glfwGetTime();
@@ -25,6 +26,7 @@ App::run() {
         // Advance physics engine in a pre-defined fixed timestep
         while (pEngine.timeAccumulator >= PHYSICS_DT) {
             pEngine.updateFrame();
+            if(check++ < 2) pEngine.debugReadback();
             pEngine.timeAccumulator -= PHYSICS_DT;
         }
 
@@ -112,6 +114,21 @@ App::setup() {
     pEngine.setWorkGroupCount();    
     pEngine.uploadUinforms();
     pEngine.initSSBOs();
+
+
+
+    pEngine.debugReadback();
+    std::cout << "Particle count at init: " << activeScene.getParticleCount() << std::endl;
+    std::cout << "Property data size: " << activeScene.getPropertyDataSize() << std::endl;
+    std::cout << "position_massOutSSBO ID: " << activeScene.position_massOutSSBO.bufferID << std::endl;
+
+    // verify the buffer was actually created
+    GLint size = 0;
+    glGetNamedBufferParameteriv(activeScene.position_massOutSSBO.bufferID, GL_BUFFER_SIZE, &size);
+    std::cout << "Actual GPU buffer size: " << size << std::endl;
+
+
+
 
     // Render setup
     rEngine.uploadSphereMesh();
