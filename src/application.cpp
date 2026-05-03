@@ -48,6 +48,7 @@ App::setup() {
     // Spacing between particles
     const float spacing = range / (float)(GRID_SIDE - 1);
     pEngine.setSmoothingRadius(spacing * 2.5f); // smoothing radius should be 2.5x the spacing
+    pEngine.setGridCellCount(range); 
 
     float totalParticleCount = maxParticles;
     float totalVolume = range * range * range;

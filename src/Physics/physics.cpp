@@ -14,6 +14,7 @@ Physics::Physics(Scene& activeScene)
     globalOffsetSumShader.load(GLOBAL_OFFSET_SUM_CSHADER_PATH);
     scatterShader.load(SCATTER_CSHADER_PATH);
     reorderBuffersShader.load(REORDER_BUFFER_CSHADER_PATH);
+    computeCellBoundariesShader.load(COMPUTE_CELL_BOUNDARIES_CSHADER_PATH);
     densityShader.load(DENSITY_CSHADER_PATH);
     pressureShader.load(PRESSURE_CSHADER_PATH);
     forceShader.load(FORCE_CSHADER_PATH);
@@ -23,10 +24,12 @@ Physics::Physics(Scene& activeScene)
 
 void 
 Physics::updateFrame() {
-
+    
     glBeginQuery(GL_TIME_ELAPSED, timeQuery);
+    refreshBoundarySSBOs();
     performSpatialHashAndSort();
     reorderParticleBuffers();
+    computeCellBoundaries();
     computeSPHUpdates();
     glEndQuery(GL_TIME_ELAPSED);
     
@@ -48,13 +51,15 @@ Physics::cleanup() {
 
 void
 Physics::uploadUinforms() {
+
     setGridUniforms();
-    setDensityUniforms();
-    setPressureUniforms();
-    setForceUniforms();
     setPrefixScanUniforms();
     setGlobalOffsetSumUniforms();
     setScatterUniforms();
+
+    setDensityUniforms();
+    setPressureUniforms();
+    setForceUniforms();
 }
 
 void 
@@ -110,37 +115,37 @@ Physics::initSSBOs() {
 
     // -------- First Cell Index buffer --------
     physicsScene.cell_index_oneSSBO.bufferDataSize = physicsScene.getParticleCountSize();
-    physicsScene.cell_index_oneSSBO.bufferData = 0;  // empty buffer
+    physicsScene.cell_index_oneSSBO.bufferData = NULL;  // empty buffer
     physicsScene.cell_index_oneSSBO.bufferBindBase = 4;
     setupSSBO(physicsScene.cell_index_oneSSBO);   
 
     // -------- First Particle Index buffer --------
     physicsScene.particle_index_oneSSBO.bufferDataSize = physicsScene.getParticleCountSize();
-    physicsScene.particle_index_oneSSBO.bufferData = 0;  // empty buffer
+    physicsScene.particle_index_oneSSBO.bufferData = NULL;  // empty buffer
     physicsScene.particle_index_oneSSBO.bufferBindBase = 5;
     setupSSBO(physicsScene.particle_index_oneSSBO);   
 
     // -------- Abort Flag buffer --------
     physicsScene.abortFlag_buffSSBO.bufferDataSize = sizeof(unsigned int); // a single unsigned integer to hold the flag value
-    physicsScene.abortFlag_buffSSBO.bufferData = 0;
+    physicsScene.abortFlag_buffSSBO.bufferData = NULL;
     physicsScene.abortFlag_buffSSBO.bufferBindBase = 6;
     setupSSBO(physicsScene.abortFlag_buffSSBO);
 
     // -------- Global Offset buffer --------
     physicsScene.gloablOffset_buffSSBO.bufferDataSize = sizeof(unsigned int) * (workgroupCount * 4);
-    physicsScene.gloablOffset_buffSSBO.bufferData = 0;
+    physicsScene.gloablOffset_buffSSBO.bufferData = NULL;
     physicsScene.gloablOffset_buffSSBO.bufferBindBase = 7;
     setupSSBO(physicsScene.gloablOffset_buffSSBO);
 
     // -------- Global Offset buffer --------
     physicsScene.blockSum_buffSSBO.bufferDataSize = sizeof(unsigned int) * (workgroupCount * 4);
-    physicsScene.blockSum_buffSSBO.bufferData = 0;
+    physicsScene.blockSum_buffSSBO.bufferData = NULL;
     physicsScene.blockSum_buffSSBO.bufferBindBase = 8;
     setupSSBO(physicsScene.blockSum_buffSSBO);
 
     // -------- Second Cell Index buffer --------
     physicsScene.cell_index_twoSSBO.bufferDataSize = physicsScene.getParticleCountSize();
-    physicsScene.cell_index_twoSSBO.bufferData = 0;  // empty buffer
+    physicsScene.cell_index_twoSSBO.bufferData = NULL;  // empty buffer
     physicsScene.cell_index_twoSSBO.bufferBindBase = 9;
     setupSSBO(physicsScene.cell_index_twoSSBO);   
 
@@ -173,6 +178,18 @@ Physics::initSSBOs() {
     physicsScene.color_paddingOutSSBO.bufferData = physicsScene.getColorPaddingData();
     physicsScene.color_paddingOutSSBO.bufferBindBase = 14;
     setupSSBO(physicsScene.color_paddingOutSSBO);
+
+    // -------- Cell Index Start buffer --------
+    physicsScene.cell_boundary_startSSBO.bufferDataSize = sizeof(int) * GRID_CELL_COUNT;
+    physicsScene.cell_boundary_startSSBO.bufferData = NULL;
+    physicsScene.cell_boundary_startSSBO.bufferBindBase = 15;
+    setupSSBO(physicsScene.cell_boundary_startSSBO);    
+
+    // -------- Cell Index End buffer --------
+    physicsScene.cell_boundary_endSSBO.bufferDataSize = sizeof(int) * GRID_CELL_COUNT;
+    physicsScene.cell_boundary_endSSBO.bufferData = NULL;
+    physicsScene.cell_boundary_endSSBO.bufferBindBase = 16;
+    setupSSBO(physicsScene.cell_boundary_endSSBO);    
 }
 
 void 
@@ -270,6 +287,14 @@ Physics::reorderParticleBuffers() {
 }
 
 void
+Physics::computeCellBoundaries() {
+    computeCellBoundariesShader.use();
+
+    glDispatchCompute(workgroupCount * 2, 1, 1);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+}
+
+void
 Physics::computeSPHUpdates() {
 
     // Density calculations pass
@@ -306,16 +331,57 @@ Physics::setGridUniforms() {
 
     gridHashShader.setInt("numParticles", physicsScene.getParticleCount());
     // slighly larger cell size to collect all particles
-    gridHashShader.setFloat("cell_size", 1.1 * SMOOTHING_RADIUS); 
-    gridHashShader.setInt("gridSize", GRID_SIDE);
+    gridHashShader.setFloat("cell_size", SMOOTHING_RADIUS); 
+    gridHashShader.setInt("gridSize", glm::ceil((MAX_BOUND - MIN_BOUND) / SMOOTHING_RADIUS));
     gridHashShader.setVec3("gridMin", glm::vec3(MIN_BOUND, MIN_BOUND, MIN_BOUND));
+}
+
+void
+Physics::setPrefixScanUniforms() {
+    prefixScanShader.use();
+
+    prefixScanShader.setInt("totalParticleCount", physicsScene.getParticleCount());
+    prefixScanShader.setInt("workGroupCount", workgroupCount);
+
+    int PARTICLES_PROCESSED_PER_WORKGROUP = THREADS_PER_GROUP * 2;
+    prefixScanShader.setInt("passCount", getScanPassCount(PARTICLES_PROCESSED_PER_WORKGROUP));
+}
+
+void
+Physics::setGlobalOffsetSumUniforms() {
+    globalOffsetSumShader.use();
+
+    int elementsProcessedPerThread = ceil((float)workgroupCount / (float)THREADS_PER_GROUP);
+    globalOffsetSumShader.setInt("elementsProcessedPerThread", elementsProcessedPerThread);
+    globalOffsetSumShader.setInt("effectiveThreadCount", getEffectiveThreadCount(workgroupCount * 4));
+}
+
+void
+Physics::setScatterUniforms() {
+    scatterShader.use();
+    
+    scatterShader.setInt("totalParticleCount", physicsScene.getParticleCount());
+    scatterShader.setInt("workGroupCount", workgroupCount);
+}
+
+void
+Physics::setReorderBuffersUniforms() {
+    reorderBuffersShader.use();
+
+    reorderBuffersShader.setInt("totalParticleCount", physicsScene.getParticleCount());
+}
+
+void
+Physics::setComputeCellBoundariesUniforms() {
+    computeCellBoundariesShader.use();
+
+    computeCellBoundariesShader.setInt("totalParticleCount", physicsScene.getParticleCount());
 }
 
 void 
 Physics::setDensityUniforms() {
     densityShader.use();
 
-    densityShader.setInt("numParticles", physicsScene.getParticleCount());
     /* 
      Pass smoothing radius square to 
      the compute densityShader to prevent repetition
@@ -325,6 +391,11 @@ Physics::setDensityUniforms() {
     // Poly6 Kernel fn
     float polySix = 315 / (64 * M_PI * pow(SMOOTHING_RADIUS, 9));
     densityShader.setFloat("poly6", polySix);
+
+    densityShader.setInt("numParticles", physicsScene.getParticleCount());
+    densityShader.setFloat("cellSize", SMOOTHING_RADIUS); 
+    densityShader.setInt("gridSize", glm::ceil((MAX_BOUND - MIN_BOUND) / SMOOTHING_RADIUS));
+    densityShader.setVec3("gridMin", glm::vec3(MIN_BOUND, MIN_BOUND, MIN_BOUND));
 }
 
 void 
@@ -358,37 +429,12 @@ Physics::setForceUniforms() {
     // which is the -ve of spike
     forceShader.setFloat("viscLaplacian", -spike);
 
-    // Floor boundary
-    forceShader.setFloat("floorY", FLOOR_BOUNDARY);
+    // Container boundary
+    forceShader.setFloat("floorBound", FLOOR_BOUNDARY); 
+    forceShader.setFloat("restingDensity", RESTING_DENSITY);
+    forceShader.setFloat("minBound", MIN_BOUND);
+    forceShader.setFloat("maxBound", MAX_BOUND);
     forceShader.setFloat("damping", DAMPING_COEFF);
-}
-
-void
-Physics::setPrefixScanUniforms() {
-    prefixScanShader.use();
-
-    prefixScanShader.setInt("totalParticleCount", physicsScene.getParticleCount());
-    prefixScanShader.setInt("workGroupCount", workgroupCount);
-
-    int PARTICLES_PROCESSED_PER_WORKGROUP = THREADS_PER_GROUP * 2;
-    prefixScanShader.setInt("passCount", getScanPassCount(PARTICLES_PROCESSED_PER_WORKGROUP));
-}
-
-void
-Physics::setGlobalOffsetSumUniforms() {
-    globalOffsetSumShader.use();
-
-    int elementsProcessedPerThread = ceil((float)workgroupCount / (float)THREADS_PER_GROUP);
-    globalOffsetSumShader.setInt("elementsProcessedPerThread", elementsProcessedPerThread);
-    globalOffsetSumShader.setInt("effectiveThreadCount", getEffectiveThreadCount(workgroupCount * 4));
-}
-
-void
-Physics::setScatterUniforms() {
-    scatterShader.use();
-    
-    scatterShader.setInt("totalParticleCount", physicsScene.getParticleCount());
-    scatterShader.setInt("workGroupCount", workgroupCount);
 }
 
 int 
@@ -438,4 +484,44 @@ Physics::setSmoothingRadius(float s) {
 float 
 Physics::getSmoothingRadius() {
     return SMOOTHING_RADIUS;
+}
+
+void
+Physics::setGridCellCount(float side) {
+    int gridCountOnSide = glm::ceil(side / SMOOTHING_RADIUS);
+    
+    GRID_CELL_COUNT = gridCountOnSide*gridCountOnSide*gridCountOnSide;
+}
+
+void
+Physics::refreshBoundarySSBOs() {
+    GLuint refreshValue = 0xFFFFFFFF;
+
+    glBindBuffer(
+        GL_SHADER_STORAGE_BUFFER,
+        physicsScene.cell_boundary_startSSBO.bufferID
+    );
+
+    glClearBufferData(
+        GL_SHADER_STORAGE_BUFFER,
+        GL_R32UI,
+        GL_RED_INTEGER,
+        GL_UNSIGNED_INT,
+        &refreshValue
+    );
+
+    glBindBuffer(
+        GL_SHADER_STORAGE_BUFFER,
+        physicsScene.cell_boundary_endSSBO.bufferID
+    );
+
+    glClearBufferData(
+        GL_SHADER_STORAGE_BUFFER,
+        GL_R32UI,
+        GL_RED_INTEGER,
+        GL_UNSIGNED_INT,
+        &refreshValue
+    );
+
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }

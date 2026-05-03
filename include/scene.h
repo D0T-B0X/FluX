@@ -34,6 +34,8 @@ public:
     Buffer         velocity_densityOutSSBO;
     Buffer         force_pressureOutSSBO;
     Buffer         color_paddingOutSSBO;
+    Buffer         cell_boundary_startSSBO;
+    Buffer         cell_boundary_endSSBO;
 
     // Holds all sphere data in the simulation
     Particles                           particles;

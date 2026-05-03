@@ -1,16 +1,25 @@
 #version 460 core
 
+#define THREADS_PER_GROUP 256
+
+#define POSITION_MASS_BUFFER 0
+#define VELOCITY_DENSITY_BUFFER 1
+
+layout(local_size_x = THREADS_PER_GROUP, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, binding = POSITION_MASS_BUFFER) readonly buffer PosBuffer { vec4 position_mass[]; };
+layout(std430, binding = VELOCITY_DENSITY_BUFFER) buffer VelBuffer { vec4 velocity_density[]; };
+
 // ------- SPH constants -------
 uniform float h2;
 uniform float poly6;
 
 // ------- Dimensional constraints -------
-uniform int   numParticles;
+uniform int numParticles;
+uniform float cellSize;
+uniform int gridSize;
+uniform vec3 gridMin;
 
-layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
-
-layout(std430, binding = 0) readonly buffer PosBuffer { vec4 position_mass[]; };
-layout(std430, binding = 1) buffer VelBuffer { vec4 velocity_density[]; };
 
 /* 
     Kernel Functions
