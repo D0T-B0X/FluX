@@ -1,28 +1,27 @@
 # FluX
 
-FluX is a real-time smoothed particle hydrodynamics (SPH) fluid simulation built with OpenGL 4.6 compute shaders. The simulation runs entirely on the GPU: particles are spatially hashed and sorted, SPH densities and forces are computed, and the results are rendered as instanced spheres in a GLFW window.
+FluX is a real-time smoothed particle hydrodynamics (SPH) fluid simulation built on OpenGL 4.6 compute shaders. The entire simulation runs on the GPU: particles are spatially hashed, sorted, and updated via compute passes, then rendered as instanced spheres in a GLFW window.
 
-This project is focused on the compute and rendering pipeline rather than a full application framework. It is a compact, GPU-first implementation that you can read and extend.
+The codebase is intentionally compact and GPU-first, focused on the compute and rendering pipeline rather than a full application framework.
 
-## What it does
-- Initializes a cubic particle volume based on `GRID_SIDE` in `include/settings.h`.
-- Advances physics using a fixed timestep (`PHYSICS_DT`) while the render loop runs independently.
-- Computes neighbor access using spatial hashing and a radix-sort pipeline on the GPU.
-- Runs SPH density, pressure, and force passes in compute shaders.
-- Renders each particle as an instanced sphere with basic lighting.
+## Highlights
+- GPU spatial hashing + radix sort for neighbor lookup
+- SPH density, pressure, and force integration in compute shaders
+- Instanced sphere rendering with basic lighting
+- Fixed physics timestep with independent render loop
 
-## How the simulation is organized
-- `Scene` owns the particle data and the shader storage buffers (SSBOs).
-- `Physics` manages the compute shaders and the dispatch pipeline:
-	- Hash grid cell indices.
-	- Radix-sort particle indices (prefix scan, global offset sum, scatter).
-	- Compute SPH density, pressure, and forces.
-- `Renderer` manages the window, camera input, and draws instanced spheres each frame.
-
-Shader sources are in `shaders/Compute` and `shaders/Render`. The build generates a `config.h` that bakes absolute shader paths, so a reconfigure is needed if you move the repository.
+## Pipeline overview
+1. Hash particle positions into grid cell indices.
+2. Radix-sort particles by cell index (prefix scan, global offset sum, scatter).
+3. Reorder particle buffers using sorted indices.
+4. Compute cell boundaries for neighbor lookups.
+5. SPH density pass.
+6. SPH pressure pass.
+7. SPH force pass and integration.
+8. Render particles as instanced spheres.
 
 ## Controls
-- Mouse: look around (cursor is captured)
+- Mouse: look around (cursor captured)
 - W/A/S/D: move camera
 - Space: move up
 - Left Ctrl: move down
@@ -34,7 +33,7 @@ Shader sources are in `shaders/Compute` and `shaders/Render`. The build generate
 - OpenGL 4.6 capable GPU/driver (GLSL 4.60)
 - GLFW3 development package and pkg-config
 
-GLAD and GLM are included in this repository, so you do not need to install them separately.
+GLAD and GLM are vendored under [include/](include/) so no separate install is required.
 
 ## Build
 ```bash
@@ -47,20 +46,32 @@ cmake --build build -j
 ./build/FluX
 ```
 
-Note: shader paths are baked into build-time configuration. If you move the repo or shaders, re-run CMake so the generated config stays valid.
+You can also use the helper scripts:
+- [test_build.sh](test_build.sh)
+- [test_run.sh](test_run.sh)
 
 ## Configuration
-Simulation constants (grid size, time step, SPH constants, gravity, viscosity) are defined in `include/settings.h`. Adjust these to trade off quality vs performance.
+Simulation constants live in [include/settings.h](include/settings.h). Key knobs include:
+- Grid size and bounds (`GRID_SIDE`, `MIN_BOUND`, `MAX_BOUND`)
+- Fixed timestep (`PHYSICS_DT`)
+- SPH constants (`SPEED_OF_SOUND`, `RESTING_DENSITY`, `K`, `VISCOSITY`)
+- Camera and render settings (`FOV`, `MOVEMENT_SPEED`, `SPHERE_RADIUS`)
+
+The build generates `config.h` with absolute shader paths. If you move the repo or shaders, re-run CMake to regenerate the paths.
+
+## Shader stats (optional)
+The [compute_stats_collection.sh](compute_stats_collection.sh) script runs Radeon GPU Analyzer (`rga`) over the compute shaders and writes CSV and ISA output to `StatsDump/`. This is optional and intended for AMD GPU profiling.
 
 ## Project layout
-- `include/`: public headers (scene, renderer, physics, settings)
-- `src/`: engine implementation and entry point
-- `shaders/`: compute and render shaders
-- `build/`: out-of-source build artifacts (generated)
+- [include/](include/): public headers (scene, renderer, physics, settings)
+- [src/](src/): engine implementation and entry point
+- [shaders/](shaders/): compute and render shaders
+- [StatsDump/](StatsDump/): optional shader analysis output
+- build/: out-of-source build artifacts (generated)
 
 ## Notes and limitations
-- The radix-sort global offset phase is designed around a fixed maximum of workgroups; very large particle counts may require adjustments in the compute pipeline.
-- The physics loop prints per-frame compute timings and an average once the app exits.
+- The radix sort global offset phase assumes up to 1024 workgroups (512 particles per workgroup), which caps particles at 524,288 without changing the compute pipeline.
+- The physics loop prints an average compute time when the app exits.
 
 ## License
 MIT. See [LICENSE](LICENSE).
