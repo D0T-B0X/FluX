@@ -59,14 +59,10 @@ Simulation constants live in [include/settings.h](include/settings.h). Key knobs
 
 The build generates `config.h` with absolute shader paths. If you move the repo or shaders, re-run CMake to regenerate the paths.
 
-## Shader stats (optional)
-The [compute_stats_collection.sh](compute_stats_collection.sh) script runs Radeon GPU Analyzer (`rga`) over the compute shaders and writes CSV and ISA output to `StatsDump/`. This is optional and intended for AMD GPU profiling.
-
 ## Project layout
 - [include/](include/): public headers (scene, renderer, physics, settings)
 - [src/](src/): engine implementation and entry point
 - [shaders/](shaders/): compute and render shaders
-- [StatsDump/](StatsDump/): optional shader analysis output
 - build/: out-of-source build artifacts (generated)
 
 ## Notes and limitations
