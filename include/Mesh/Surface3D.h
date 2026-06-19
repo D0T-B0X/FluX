@@ -38,7 +38,7 @@ class Surface3D {
 public:
     Surface3D();
 
-    SurfaceInstanceData generateSurface(sNormal normal, uint density, float distance);
+    SurfaceInstanceData generateSurfaceMesh(sNormal normal, uint density, float distance);
 
 private:
     std::vector<uint> calculateIndices();

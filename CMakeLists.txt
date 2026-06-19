@@ -49,10 +49,23 @@ add_executable(
     ${CMAKE_SOURCE_DIR}/src/glad.c
 )
 
-target_include_directories(${PROJECT_NAME} PRIVATE ${GLFW_INCLUDE_DIRECTORIES})
-target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/include)
-target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_BINARY_DIR})
+option(DEBUG_ENABLE "Enable debug instrumentation" OFF)
 
-target_link_libraries(${PROJECT_NAME} PRIVATE ${GLFW_LIBRARIES} dl)
+if (DEBUG_ENABLE)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE DEBUG)
+endif()
 
-target_compile_options(${PROJECT_NAME} PRIVATE ${GLFW_CFLAGS_OTHER})
+target_include_directories(${PROJECT_NAME} PRIVATE
+    ${GLFW_INCLUDE_DIRECTORIES}
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_BINARY_DIR}
+)
+
+target_link_libraries(${PROJECT_NAME} PRIVATE 
+    ${GLFW_LIBRARIES} 
+    ${CMAKE_DL_LIBS}
+)
+
+target_compile_options(${PROJECT_NAME} PRIVATE 
+    ${GLFW_CFLAGS_OTHER}
+)

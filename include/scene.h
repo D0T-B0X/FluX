@@ -25,7 +25,6 @@ public:
     Buffer         color_paddingInSSBO;
     Buffer         cell_index_oneSSBO;
     Buffer         particle_index_oneSSBO;
-    Buffer         abortFlag_buffSSBO;    
     Buffer         gloablOffset_buffSSBO;
     Buffer         blockSum_buffSSBO;
     Buffer         cell_index_twoSSBO;
@@ -41,6 +40,9 @@ public:
     Particles                           particles;
 
     Scene();
+
+    // -------- Scene state --------
+    void                                initialize();
 
     // -------- Global sphere access ---------
     Sphere3D&                           getGlobalSphere();
@@ -63,7 +65,7 @@ public:
 
 private:
     // Global sphere mesh
-    Sphere3D                            globalSphere;
+    Sphere3D                            globalSphereMesh;
 
     // Box mesh
     Surface3D                           surfaceMesh;   

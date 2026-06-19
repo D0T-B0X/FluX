@@ -25,7 +25,7 @@ public:
     Sphere3D();
     Sphere3D(uint subdivs);
 
-    void                 buildSphere();
+    void                 generateSphereMesh();
 
     // Getter functions
     float*               getVertices();
@@ -35,12 +35,12 @@ public:
     uint                 getIndexCount();
     uint                 getSubdivisions();
     float                getRadius();
-    bool                 isMeshDrity();
+    bool                 isDrity();
 
     // Setter functions
     void                 setSubdivision(uint uSubdivs);
     void                 setRadius(float radius);
-    void                 setMeshDirtyStatus();
+    void                 setDirtyStateFalse();
 
 private:
     uint                 uSubdivisions; 

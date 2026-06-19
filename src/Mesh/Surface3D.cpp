@@ -4,7 +4,7 @@
 Surface3D::Surface3D() { }
 
 SurfaceInstanceData 
-Surface3D::generateSurface(sNormal normal, uint density, float distance) {
+Surface3D::generateSurfaceMesh(sNormal normal, uint density, float distance) {
     uint numLines = density + 1;
 
     SurfaceInstanceData surface;

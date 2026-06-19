@@ -1,4 +1,6 @@
 /build
 /StatsDump/
 /.vscode/
+/docs/
+.gitignore
 *.sh

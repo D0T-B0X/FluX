@@ -80,56 +80,11 @@ Physics::setupSSBO(Buffer& b) {
         GL_DYNAMIC_DRAW
     );
 
-    GLenum err = glGetError();
-    if (err != GL_NO_ERROR) {
-        std::cout << "glNamedBufferData error: " << err << " for binding " << b.bufferBindBase << std::endl;
-    }
-
     glBindBufferBase(
         GL_SHADER_STORAGE_BUFFER,
         b.bufferBindBase,
         b.bufferID
     );
-}
-
-void Physics::debugReadback() {
-    glFinish();
-    
-    GLint size = 0;
-    glGetNamedBufferParameteriv(
-        physicsScene.position_massOutSSBO.bufferID, 
-        GL_BUFFER_SIZE, 
-        &size
-    );
-    std::cout << "Buffer size: " << size << " bytes" << std::endl;
-    
-    if (size == 0) {
-        std::cout << "Buffer is empty!" << std::endl;
-        return;
-    }
-
-    void* data = glMapNamedBuffer(
-        physicsScene.position_massOutSSBO.bufferID, 
-        GL_READ_ONLY
-    );
-
-    if (!data) {
-        std::cout << "Map failed! GL error: " << glGetError() << std::endl;
-        return;
-    }
-
-    float* floats = (float*)data;
-    int count = std::min(5, physicsScene.getParticleCount());
-    for (int i = 0; i < count; i++) {
-        int base = i * 4;
-        std::cout << "particle[" << i << "] pos=("
-                  << floats[base + 0] << ", "
-                  << floats[base + 1] << ", "
-                  << floats[base + 2] << ") mass="
-                  << floats[base + 3] << std::endl;
-    }
-
-    glUnmapNamedBuffer(physicsScene.position_massOutSSBO.bufferID);
 }
 
 void
@@ -171,19 +126,13 @@ Physics::initSSBOs() {
     physicsScene.particle_index_oneSSBO.bufferBindBase = 5;
     setupSSBO(physicsScene.particle_index_oneSSBO);   
 
-    // -------- Abort Flag buffer --------
-    physicsScene.abortFlag_buffSSBO.bufferDataSize = sizeof(unsigned int); // a single unsigned integer to hold the flag value
-    physicsScene.abortFlag_buffSSBO.bufferData = NULL;
-    physicsScene.abortFlag_buffSSBO.bufferBindBase = 6;
-    setupSSBO(physicsScene.abortFlag_buffSSBO);
-
     // -------- Global Offset buffer --------
     physicsScene.gloablOffset_buffSSBO.bufferDataSize = sizeof(unsigned int) * (workgroupCount * 4);
     physicsScene.gloablOffset_buffSSBO.bufferData = NULL;
     physicsScene.gloablOffset_buffSSBO.bufferBindBase = 7;
     setupSSBO(physicsScene.gloablOffset_buffSSBO);
 
-    // -------- Global Offset buffer --------
+    // -------- Block Sum buffer --------
     physicsScene.blockSum_buffSSBO.bufferDataSize = sizeof(unsigned int) * (workgroupCount * 4);
     physicsScene.blockSum_buffSSBO.bufferData = NULL;
     physicsScene.blockSum_buffSSBO.bufferBindBase = 8;
@@ -318,25 +267,6 @@ Physics::performSpatialHashAndSort() {
         Buffer& outParticleIndex = physicsScene.particle_index_twoSSBO;
         swapInputAndOutputBuffers(inParticleIndex, outParticleIndex);
     }
-
-    glFinish();
-    void* data = glMapNamedBuffer(physicsScene.cell_index_oneSSBO.bufferID, GL_READ_ONLY);
-    GLuint* indices = (GLuint*)data;
-
-    GLuint minCell = UINT_MAX, maxCell = 0;
-    int validCount = 0;
-    int gridSize = ceil((MAX_BOUND - MIN_BOUND) / SMOOTHING_RADIUS);
-    int maxValidCell = gridSize * gridSize * gridSize;
-
-    for (int i = 0; i < physicsScene.getParticleCount(); i++) {
-        if (indices[i] < (GLuint)maxValidCell) validCount++;
-        minCell = glm::min(minCell, indices[i]);
-        maxCell = glm::max(maxCell, indices[i]);
-    }
-    std::cout << "cellIndex range: " << minCell << " to " << maxCell 
-            << " valid: " << validCount << "/" << physicsScene.getParticleCount()
-            << " maxValidCell: " << maxValidCell << std::endl;
-    glUnmapNamedBuffer(physicsScene.cell_index_oneSSBO.bufferID);
 }
 
 void
@@ -378,7 +308,7 @@ Physics::reorderParticleBuffers() {
 
     reorderBuffersShader.use();
 
-    glDispatchCompute(workgroupCount * 2, 1, 1);
+    glDispatchCompute(workgroupCount, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
@@ -386,7 +316,7 @@ void
 Physics::computeCellBoundaries() {
     computeCellBoundariesShader.use();
 
-    glDispatchCompute(workgroupCount * 2, 1, 1);
+    glDispatchCompute(workgroupCount, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
@@ -397,8 +327,10 @@ Physics::computeSPHUpdates() {
 
     // Density calculations pass
     densityShader.use();
-    glDispatchCompute(workgroupCount * 2, 1, 1);
+    glDispatchCompute(workgroupCount, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+#ifdef DEBUG
 
     glFinish();
     void* data = glMapNamedBuffer(physicsScene.velocity_densityOutSSBO.bufferID, GL_READ_ONLY);
@@ -408,15 +340,17 @@ Physics::computeSPHUpdates() {
     }
     glUnmapNamedBuffer(physicsScene.velocity_densityOutSSBO.bufferID);
 
+#endif
+
     // Pressure calculations pass
     pressureShader.use();
-    glDispatchCompute(workgroupCount * 2, 1, 1);
+    glDispatchCompute(workgroupCount, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     // Pressure force calculations pass
     forceShader.use();
     forceShader.setFloat("dt", PHYSICS_DT);
-    glDispatchCompute(workgroupCount * 2, 1, 1);
+    glDispatchCompute(workgroupCount, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 }
 
@@ -424,11 +358,12 @@ void
 Physics::setWorkGroupCount() {
     // Lacks proper error handling :/
     if (physicsScene.getParticleCount() < 1) { workgroupCount = 1; return; }
-
-    int PARTCILES_PROCESSED_PER_WORKGROUP = THREADS_PER_GROUP * 2;
-    workgroupCount = ceil((float)physicsScene.getParticleCount() / (float)PARTCILES_PROCESSED_PER_WORKGROUP);
-
+    
+    workgroupCount = ceil((float)physicsScene.getParticleCount() / (float)PARTICLES_PER_WORKGROUP);
+    
+#ifdef DEBUG
     std::cout << "Workgroup count: " << workgroupCount << std::endl;
+#endif
 }
 
 void 
@@ -495,8 +430,17 @@ Physics::setDensityUniforms() {
     densityShader.setFloat("h2", SMOOTHING_RADIUS*SMOOTHING_RADIUS);
 
     // Poly6 Kernel fn
+#ifdef DEBUG
+    std::cout << "Smoothing Radius: " << SMOOTHING_RADIUS << std::endl;
+#endif 
     float polySix = 315 / (64 * M_PI * pow(SMOOTHING_RADIUS, 9));
     densityShader.setFloat("poly6", polySix);
+
+    float w_at_zero = polySix * pow(SMOOTHING_RADIUS, 6);
+#ifdef DEBUG
+    std::cout << "W(0): " << w_at_zero << std::endl;
+    std::cout << "approx density 30 neighbors: " << 30 * 0.000125f * w_at_zero << std::endl;
+#endif
 
     int gridCountOnSide = glm::ceil((MAX_BOUND - MIN_BOUND) / SMOOTHING_RADIUS);
     densityShader.setInt("totalParticleCount", physicsScene.getParticleCount());

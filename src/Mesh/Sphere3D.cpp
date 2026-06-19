@@ -15,8 +15,6 @@ Sphere3D::Sphere3D()
 
     // Points per face is simply the square of points per row
     uPointsPerFace = uPointsPerRow * uPointsPerRow; 
-
-    buildSphere();
 }
 
 Sphere3D::Sphere3D(uint subdivs) 
@@ -29,8 +27,6 @@ Sphere3D::Sphere3D(uint subdivs)
 {
     uPointsPerRow = uSubdivisions + 2;
     uPointsPerFace = uPointsPerRow * uPointsPerRow; 
-
-    buildSphere();
 }
 
 // ____ Getter functions ____
@@ -62,7 +58,7 @@ float Sphere3D::getRadius() {
     return fRadius;
 }
 
-bool Sphere3D::isMeshDrity() {
+bool Sphere3D::isDrity() {
     return bDirtyMesh;
 }
 
@@ -73,7 +69,7 @@ void Sphere3D::setSubdivision(uint uSubdivs) {
     uPointsPerRow = uSubdivisions + 2;
     uPointsPerFace = uPointsPerRow * uPointsPerRow;
 
-    buildSphere();
+    generateSphereMesh();
 }
 
 void Sphere3D::setRadius(float radius) {
@@ -85,12 +81,12 @@ void Sphere3D::setRadius(float radius) {
     fRadius = radius;
 }
 
-void Sphere3D::setMeshDirtyStatus() {
+void Sphere3D::setDirtyStateFalse() {
     bDirtyMesh = false;
 }
 
 // ____ Sphere Generation ____
-void Sphere3D::buildSphere() {
+void Sphere3D::generateSphereMesh() {
     vfVertices.clear();
     vuIndices.clear();
 

@@ -8,6 +8,7 @@ class App {
 public:
     App();
 
+    void init();
     void run();
 
 private:
@@ -15,7 +16,6 @@ private:
     Renderer    rEngine;
     Physics     pEngine;
 
-    void setup();
 };
 
 #endif

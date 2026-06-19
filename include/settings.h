@@ -57,6 +57,6 @@ inline constexpr float          VISCOSITY                =    0.001f;
 // **** !! W A R N I N G !! ****
 // DO NOT MODIFY UNLESS YOU KNOW WHAT YOU ARE DOING
 inline constexpr int            THREADS_PER_GROUP        =    256;
-inline constexpr int            PARTICLES_PER_WORKGROUP  =    THREADS_PER_GROUP * 2;
+inline constexpr int            PARTICLES_PER_WORKGROUP  =    THREADS_PER_GROUP;
 
 #endif

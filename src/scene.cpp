@@ -8,9 +8,17 @@ Scene::Scene()
     particleCount(0)
     { }
 
+
+void 
+Scene::initialize()
+{
+    // generates the sphere mesh and stores it in the object
+    globalSphereMesh.generateSphereMesh();
+}
+
 Sphere3D& 
 Scene::getGlobalSphere() {
-    return globalSphere;
+    return globalSphereMesh;
 }
 
 void 
@@ -20,13 +28,21 @@ Scene::addSurface(SurfaceInstanceData surface) {
 
 SurfaceInstanceData 
 Scene::createSurface(sNormal normal, uint density, float distance) {
-    return surfaceMesh.generateSurface(normal, density, distance);
+    return surfaceMesh.generateSurfaceMesh(normal, density, distance);
 }
 
 bool
 Scene::hasNoSpheres() {
     return particleCount == 0;
 }
+
+void
+Scene::incrementParticleCount() {
+    ++particleCount;
+}
+
+
+/* ***** GETTERS ***** */
 
 Particles& 
 Scene::getSpheres() {
@@ -36,11 +52,6 @@ Scene::getSpheres() {
 int 
 Scene::getParticleCount() {
     return particleCount;
-}
-
-void
-Scene::incrementParticleCount() {
-    ++particleCount;
 }
 
 unsigned int 

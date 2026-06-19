@@ -8,7 +8,7 @@ Shader::Shader()
     { }
 
 // Render specific funtions
-void Shader::load(MeshType type, const char* vertexPath, const char* fragmentPath) {
+void Shader::load(ShaderMesh type, const char* vertexPath, const char* fragmentPath) {
     std::string vertexCode;
     std::string fragmentCode;
 
@@ -31,7 +31,7 @@ void Shader::load(MeshType type, const char* vertexPath, const char* fragmentPat
         vertexCode = vertexStream.str();
         fragmentCode = fragmentStream.str();
     } catch (std::ifstream::failure e) {
-        std::string debugTypeName = type == SPHERE ? "SPHERE" : "SURFACE";
+        std::string debugTypeName = (type == SPHERE_SHADER) ? "SPHERE" : "SURFACE";
         std::cout << "ERROR::SHADER_FILE::NOT_SUCCESSFUlLY_READ for type: " << debugTypeName << std::endl;
     }
 
@@ -52,7 +52,7 @@ void Shader::load(MeshType type, const char* vertexPath, const char* fragmentPat
     checkCompileErrors(fragment, "FRAGMENT", type);
 
     // Assign the program ID of the object type being rendered
-    uint& ID = type == SPHERE ? SphereID : SurfaceID;
+    uint& ID = type == SPHERE_SHADER ? SphereID : SurfaceID;
 
     // Create program and attach the shaders to it
     ID = glCreateProgram();
@@ -68,40 +68,40 @@ void Shader::load(MeshType type, const char* vertexPath, const char* fragmentPat
     glDeleteShader(fragment);
 }
 
-void Shader::use(MeshType type) {
-    uint& ID = type == SPHERE ? SphereID : SurfaceID;
+void Shader::use(ShaderMesh type) {
+    uint& ID = type == SPHERE_SHADER ? SphereID : SurfaceID;
     glUseProgram(ID);
 }
 
-void Shader::setBool(MeshType type, const char* name, int val) {
-    uint& ID = type == SURFACE ? SurfaceID : SphereID;
+void Shader::setBool(ShaderMesh type, const char* name, int val) {
+    uint& ID = type == SURFACE_SHADER ? SurfaceID : SphereID;
     glProgramUniform1i(ID, glGetUniformLocation(ID, name), val);
 }
 
-void Shader::setInt(MeshType type, const char* name, int val) {
-    uint& ID = type == SURFACE ? SurfaceID : SphereID;
+void Shader::setInt(ShaderMesh type, const char* name, int val) {
+    uint& ID = type == SURFACE_SHADER ? SurfaceID : SphereID;
     glProgramUniform1i(ID, glGetUniformLocation(ID, name), val);
 }
 
-void Shader::setFloat(MeshType type, const char* name, float val) {
-    uint& ID = type == SURFACE ? SurfaceID : SphereID;
+void Shader::setFloat(ShaderMesh type, const char* name, float val) {
+    uint& ID = type == SURFACE_SHADER ? SurfaceID : SphereID;
     glProgramUniform1f(ID, glGetUniformLocation(ID, name), val); 
 }
 
-void Shader::setVec3(MeshType type, const char* name, glm::vec3 vec) {
-    uint& ID = type == SURFACE ? SurfaceID : SphereID;
+void Shader::setVec3(ShaderMesh type, const char* name, glm::vec3 vec) {
+    uint& ID = type == SURFACE_SHADER ? SurfaceID : SphereID;
     glProgramUniform3fv(ID, glGetUniformLocation(ID, name), 1, glm::value_ptr(vec));
 }
 
-void Shader::setMat4(MeshType type, const char* name, glm::mat4 mat) {
-    uint& ID = type == SURFACE ? SurfaceID : SphereID;
+void Shader::setMat4(ShaderMesh type, const char* name, glm::mat4 mat) {
+    uint& ID = type == SURFACE_SHADER ? SurfaceID : SphereID;
     glProgramUniformMatrix4fv(ID, glGetUniformLocation(ID, name), 1, GL_FALSE, glm::value_ptr(mat));
 }
 
-void Shader::checkCompileErrors(uint shader, const char* type, MeshType mType) {
+void Shader::checkCompileErrors(uint shader, const char* type, ShaderMesh shader_type) {
     int success;
     char infoLog[1024];
-    std::string debugTypeName = mType == SPHERE ? "SPHERE" : "SURFACE";
+    std::string debugTypeName = shader_type == SPHERE_SHADER ? "SPHERE" : "SURFACE";
 
     if (std::string(type) != "PROGRAM") {
         glGetShaderiv(shader, GL_COMPILE_STATUS, &success);

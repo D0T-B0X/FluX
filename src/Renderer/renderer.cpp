@@ -33,8 +33,8 @@ Renderer::Renderer(Scene& activeScene)
     glfwSetCursorPosCallback(window, cursorPositionCallback);
 
     // Load shaders for surface and sphere objects
-    shader.load(SPHERE, SPHERE_VSHADER_PATH, SPHERE_FSHADER_PATH);
-    shader.load(SURFACE, SURFACE_VSHADER_PATH, SURFACE_FSHADER_PATH);
+    shader.load(SPHERE_SHADER, SPHERE_VSHADER_PATH, SPHERE_FSHADER_PATH);
+    shader.load(SURFACE_SHADER, SURFACE_VSHADER_PATH, SURFACE_FSHADER_PATH);
 
     setUniforms();
 }
@@ -45,13 +45,15 @@ Renderer::renderFrame() {
      Change radius of the sphere mesh uniform if 
      the mesh is marked dirty.
      */
-    if (renderScene.getGlobalSphere().isMeshDrity()) {
-        shader.setFloat(SPHERE, "fRadius", renderScene.getGlobalSphere().getRadius());
-        renderScene.getGlobalSphere().setMeshDirtyStatus();
+    Sphere3D& sphere = renderScene.getGlobalSphere();
+
+    if (sphere.isDrity()) {
+        shader.setFloat(SPHERE_SHADER, "fRadius", sphere.getRadius());
+        sphere.setDirtyStateFalse();
     }
 
-    shader.setMat4(SPHERE, "view", camera.generateViewMatrix());
-    shader.setMat4(SPHERE, "projection", camera.generateProjectionMatrix());
+    shader.setMat4(SPHERE_SHADER, "view", camera.generateViewMatrix());
+    shader.setMat4(SPHERE_SHADER, "projection", camera.generateProjectionMatrix());
 
     processKeyboardInput();
 
@@ -68,49 +70,52 @@ Renderer::renderFrame() {
 
 void 
 Renderer::setSphereSubdivisions(uint subdivs) {
-    renderScene.getGlobalSphere().setSubdivision(subdivs);
+    Sphere3D& sphere = renderScene.getGlobalSphere();
+
+    sphere.setSubdivision(subdivs);
 
     glBindVertexArray(uVAO);
 
     glBindBuffer(GL_ARRAY_BUFFER, uVBO);
     glBufferData(
         GL_ARRAY_BUFFER, 
-        renderScene.getGlobalSphere().getVerticesSize(), 
-        renderScene.getGlobalSphere().getVertices(), 
+        sphere.getVerticesSize(), 
+        sphere.getVertices(), 
         GL_STATIC_DRAW
     );
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, uEBO);
     glBufferData(
         GL_ELEMENT_ARRAY_BUFFER,
-        renderScene.getGlobalSphere().getIndicesSize(),
-        renderScene.getGlobalSphere().getIndices(),
+        sphere.getIndicesSize(),
+        sphere.getIndices(),
         GL_STATIC_DRAW
     );
 
-    this->sphereIndexCount = renderScene.getGlobalSphere().getIndexCount();
+    this->sphereIndexCount = sphere.getIndexCount();
     glBindVertexArray(0);
 }
 
 void 
 Renderer::setUniforms() {
     // Set Sphere Uniforms
-    shader.use(SPHERE);
+    shader.use(SPHERE_SHADER);
 
-    shader.setFloat(SPHERE, "fRadius", renderScene.getGlobalSphere().getRadius());
+    Sphere3D& sphere = renderScene.getGlobalSphere();
+    shader.setFloat(SPHERE_SHADER, "fRadius", sphere.getRadius());
     // Test light source
-    shader.setVec3(SPHERE, "lightSourcePosition", glm::vec3(2.0f, 2.0f, 3.0f));
-    shader.setVec3(SPHERE, "lightColor", glm::vec3(1.0f, 1.0f, 1.0f));
+    shader.setVec3(SPHERE_SHADER, "lightSourcePosition", glm::vec3(2.0f, 2.0f, 3.0f));
+    shader.setVec3(SPHERE_SHADER, "lightColor", glm::vec3(1.0f, 1.0f, 1.0f));
 
     // Set Surface Uniforms
-    shader.use(SURFACE); // TODO => Make separate function for surfaces
+    shader.use(SURFACE_SHADER); // TODO => Make separate function for surfaces
 }
 
 void 
 Renderer::drawSpheres() {
     if (renderScene.hasNoSpheres()) { return; }
 
-    shader.use(SPHERE);
+    shader.use(SPHERE_SHADER);
 
     glBindVertexArray(uVAO);
 
@@ -127,7 +132,7 @@ Renderer::drawSpheres() {
 
 void 
 Renderer::drawSurfaces() {
-    shader.use(SURFACE);
+    shader.use(SURFACE_SHADER);
 }
 
 bool 
@@ -187,6 +192,7 @@ Renderer::processKeyboardInput() {
 
 void 
 Renderer::uploadSphereMesh() {
+    Sphere3D& sphere = renderScene.getGlobalSphere();
 
     if (!this->uVAO) {
         glGenVertexArrays(1, &uVAO);
@@ -200,8 +206,8 @@ Renderer::uploadSphereMesh() {
     glBindBuffer(GL_ARRAY_BUFFER, uVBO);
     glBufferData(
         GL_ARRAY_BUFFER, 
-        renderScene.getGlobalSphere().getVerticesSize(),
-        renderScene.getGlobalSphere().getVertices(),
+        sphere.getVerticesSize(),
+        sphere.getVertices(),
         GL_STATIC_DRAW
     );
 
@@ -212,12 +218,12 @@ Renderer::uploadSphereMesh() {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, uEBO);
     glBufferData(
         GL_ELEMENT_ARRAY_BUFFER,
-        renderScene.getGlobalSphere().getIndicesSize(),
-        renderScene.getGlobalSphere().getIndices(),
+        sphere.getIndicesSize(),
+        sphere.getIndices(),
         GL_STATIC_DRAW
     );
 
-    this->sphereIndexCount = renderScene.getGlobalSphere().getIndexCount();
+    this->sphereIndexCount = sphere.getIndexCount();
 
     glBindVertexArray(0);
 }

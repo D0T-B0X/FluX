@@ -2,7 +2,7 @@
 
 #define GLOBAL_OFFSET_BUFFER 7
 
-#define PARTICLE_COUNT 512
+#define PARTICLE_COUNT 256
 #define THREADS_PER_GROUP 256
 #define MAX_WORKGROUPS_PROCESSED 1024
 #define SHARED_OFFSET_ARRAY_SIZE (MAX_WORKGROUPS_PROCESSED * 4) // 1204 * 4 = 4096
@@ -31,6 +31,7 @@ main() {
     uint workGroupIndex = gl_WorkGroupID.x;
     uint localThreadIndex = gl_LocalInvocationIndex;
     uint conflictFreeLocalIndex = CONFLICT_FREE_INDEX(localThreadIndex);
+
     uint elementsProcessedPerThreadU = uint(elementsProcessedPerThread);
     uint effectiveThreadCountU = uint(effectiveThreadCount);
 
@@ -71,7 +72,7 @@ main() {
 
     // up-sweep
 
-    uint passCount = uint(log2(float(THREADS_PER_GROUP)));
+    uint passCount = 8u;
     for(uint pass = 0; pass < passCount; ++pass) {
         uint stride = 1u << pass;
         uint maxThreadsForCurrentPass = (THREADS_PER_GROUP / 2) >> pass;
@@ -108,9 +109,9 @@ main() {
             uint conflictFreeRightIndex = CONFLICT_FREE_INDEX(rightIndex);
             uint conflictFreeLeftIndex = CONFLICT_FREE_INDEX(leftIndex);
 
-            uint rightChild = shared_block_sums[conflictFreeRightIndex];
-            shared_block_sums[conflictFreeRightIndex] += shared_block_sums[conflictFreeLeftIndex];
-            shared_block_sums[conflictFreeLeftIndex] = rightChild;
+            uint leftChild = shared_block_sums[conflictFreeLeftIndex];
+            shared_block_sums[conflictFreeLeftIndex] = shared_block_sums[conflictFreeRightIndex];
+            shared_block_sums[conflictFreeRightIndex] += leftChild;
         }
         barrier();
     }
