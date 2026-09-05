@@ -109,7 +109,7 @@ main() {
         uint stride = 1u << pass; 
         
         // Maximum threads that can process the buffer for current pass
-        uint maxThreadsForCurrentPass = THREADS_PER_GROUP >> pass;
+        uint maxThreadsForCurrentPass = THREADS_PER_GROUP >> (pass + 1);
         
         if (localThreadIndex < maxThreadsForCurrentPass) {
 
@@ -178,13 +178,12 @@ main() {
 
     for(uint pass = 0u; pass < passCountU; ++pass) {
         uint stride = 1u << (passCountU - pass - 1u);
-        uint offset = 1u << pass;
 
-        uint maxThreadsForCurrentPass = THREADS_PER_GROUP >> (passCountU - pass - 1u);
+        uint maxThreadsForCurrentPass = THREADS_PER_GROUP >> (passCountU - pass);
         
         if (localThreadIndex < maxThreadsForCurrentPass) {
 
-            uint s_index = (offset - localThreadIndex) * (2 * stride) - 1;
+            uint s_index = (localThreadIndex + 1) * (2 * stride) - 1;
 
             uint right_index_zero  = digit_offset_zero  + s_index;
             uint right_index_one   = digit_offset_one   + s_index;

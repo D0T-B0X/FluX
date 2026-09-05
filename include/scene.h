@@ -41,9 +41,6 @@ public:
 
     Scene();
 
-    // -------- Scene state --------
-    void                                initialize();
-
     // -------- Global sphere access ---------
     Sphere3D&                           getGlobalSphere();
 

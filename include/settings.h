@@ -22,17 +22,17 @@ inline const unsigned int       SCR_HEIGHT               =    1080u;
 
 // -------- Dimensions Constraints ----------
 inline constexpr int            GRID_SIDE                =    20;
-inline constexpr float          MIN_BOUND                =   -0.05f;
-inline constexpr float          MAX_BOUND                =    0.05f;
-inline constexpr float          FLOOR_BOUNDARY           =    MIN_BOUND - 0.05f;
-inline constexpr float          SPHERE_RADIUS            =    0.002f;
+inline constexpr float          MIN_BOUND                =   -0.2f;
+inline constexpr float          MAX_BOUND                =    0.2f;
+inline constexpr float          FLOOR_BOUNDARY           =    MIN_BOUND - 0.1f;
+inline constexpr float          SPHERE_RADIUS            =    0.01f;
 inline constexpr unsigned int   SPHERE_SUBDIVISIONS      =    6u;
 
 // -------- Camera Settings -----------------
 inline constexpr glm::vec3      CAMERA_POSITION          =    glm::vec3(0.0f, MAX_BOUND - 0.2, MAX_BOUND + 0.3);
 inline constexpr float          FOV                      =    90.0f;
 inline constexpr float          MOUSE_SENSITIVITY        =    0.5f;   
-inline constexpr float          MOVEMENT_SPEED           =    0.2f;
+inline constexpr float          MOVEMENT_SPEED           =    0.1f;
 
 // -------- SPH constants (SI: kg, m, s) ----
 inline constexpr float          SPEED_OF_SOUND           =    60.0f;                                                           // c = 60 m/s
@@ -41,7 +41,7 @@ inline constexpr int            GAMMA                    =    7;
 inline constexpr float          K                        =    (RESTING_DENSITY * (SPEED_OF_SOUND*SPEED_OF_SOUND) / GAMMA);     // Pa  (B = ρ₀c²/γ)
 
 // -------- TIME-STEPS ----------------------
-inline constexpr float          PHYSICS_DT               =    0.0020f;
+inline constexpr float          PHYSICS_DT               =    0.0002f;
 inline constexpr float          RENDER_DT                =    0.0166f;
 
 // -------- Physical Constants --------------

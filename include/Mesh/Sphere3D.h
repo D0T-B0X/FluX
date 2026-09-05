@@ -25,8 +25,6 @@ public:
     Sphere3D();
     Sphere3D(uint subdivs);
 
-    void                 generateSphereMesh();
-
     // Getter functions
     float*               getVertices();
     uint                 getVerticesSize();
@@ -51,6 +49,7 @@ private:
     std::vector<float>   vfVertices;
     std::vector<uint>    vuIndices;
 
+    void                 generateSphereMesh();
     std::vector<float>   buildFaceVertices(Face face, int iDirection);
     void                 buildIndices();
 };

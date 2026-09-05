@@ -116,7 +116,7 @@ main() {
             * f = -mᵢ Σⱼ mⱼ · ((pᵢ + pⱼ) / (2ρⱼ)) · ∇W_spiky(rᵢ - rⱼ, h)
             */
             p_force += neighbourParticleMass
-                        * ((currentParticlePressure + neighbourParticlePressure) / (neighbourParticleDesnity*neighbourParticleDesnity))
+                        * ((currentParticlePressure + neighbourParticlePressure) / (2 * neighbourParticleDesnity))
                         * gradW_spike(r, r_len);
 
             /**

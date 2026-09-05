@@ -8,14 +8,6 @@ Scene::Scene()
     particleCount(0)
     { }
 
-
-void 
-Scene::initialize()
-{
-    // generates the sphere mesh and stores it in the object
-    globalSphereMesh.generateSphereMesh();
-}
-
 Sphere3D& 
 Scene::getGlobalSphere() {
     return globalSphereMesh;

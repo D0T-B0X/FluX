@@ -34,9 +34,6 @@ App::run() {
 
 void 
 App::init() {
-    // Initialize all scene objects
-    activeScene.initialize();
-
     // Set the global sphere radius
     Sphere3D& sphere = activeScene.getGlobalSphere(); 
     sphere.setRadius(SPHERE_RADIUS);

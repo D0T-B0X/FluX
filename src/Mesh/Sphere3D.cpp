@@ -15,6 +15,8 @@ Sphere3D::Sphere3D()
 
     // Points per face is simply the square of points per row
     uPointsPerFace = uPointsPerRow * uPointsPerRow; 
+
+    generateSphereMesh();
 }
 
 Sphere3D::Sphere3D(uint subdivs) 
@@ -27,6 +29,8 @@ Sphere3D::Sphere3D(uint subdivs)
 {
     uPointsPerRow = uSubdivisions + 2;
     uPointsPerFace = uPointsPerRow * uPointsPerRow; 
+
+    generateSphereMesh();
 }
 
 // ____ Getter functions ____

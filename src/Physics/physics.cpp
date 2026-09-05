@@ -49,6 +49,8 @@ Physics::updateFrame() {
 
 void 
 Physics::cleanup() {
+    // TODO => Do something with this negro
+
     // do not consider the first 60 iterations for average
     std::cout << "Average compute time: " << timeSum / (iteration - 60) << " ms" <<std::endl;
 }
@@ -373,7 +375,7 @@ Physics::setGridUniforms() {
     gridHashShader.setInt("numParticles", physicsScene.getParticleCount());
     // slighly larger cell size to collect all particles
     gridHashShader.setFloat("cell_size", SMOOTHING_RADIUS); 
-    gridHashShader.setInt("gridSize", glm::ceil((MAX_BOUND - MIN_BOUND) / SMOOTHING_RADIUS));
+    gridHashShader.setInt("gridSize", std::ceil((MAX_BOUND - MIN_BOUND) / SMOOTHING_RADIUS));
     gridHashShader.setVec3("gridMin", glm::vec3(MIN_BOUND, MIN_BOUND, MIN_BOUND));
 }
 
@@ -442,7 +444,7 @@ Physics::setDensityUniforms() {
     std::cout << "approx density 30 neighbors: " << 30 * 0.000125f * w_at_zero << std::endl;
 #endif
 
-    int gridCountOnSide = glm::ceil((MAX_BOUND - MIN_BOUND) / SMOOTHING_RADIUS);
+    int gridCountOnSide = std::ceil((MAX_BOUND - MIN_BOUND) / SMOOTHING_RADIUS);
     densityShader.setInt("totalParticleCount", physicsScene.getParticleCount());
     densityShader.setFloat("cellSize", SMOOTHING_RADIUS); 
     densityShader.setInt("gridSize", gridCountOnSide);
@@ -475,7 +477,7 @@ Physics::setForceUniforms() {
 
     forceShader.setInt("numParticles", physicsScene.getParticleCount());
 
-    int gridCountOnSide = glm::ceil((MAX_BOUND - MIN_BOUND) / SMOOTHING_RADIUS);
+    int gridCountOnSide = std::ceil((MAX_BOUND - MIN_BOUND) / SMOOTHING_RADIUS);
 
     forceShader.setFloat("h", SMOOTHING_RADIUS);
     forceShader.setVec3("GRAVITY_C", GRAV_CONSTANT);         // m/s²
@@ -534,6 +536,8 @@ Physics::swapInputAndOutputBuffers(Buffer& in, Buffer& out) {
 
     swapBuffers(in, outBase);
     swapBuffers(out, inBase);
+
+    std::swap(in.bufferBindBase, out.bufferBindBase);
 }
 
 void 
@@ -549,7 +553,7 @@ Physics::getSmoothingRadius() {
 
 void
 Physics::setGridCellCount(float side) {
-    int gridCountOnSide = glm::ceil(side / SMOOTHING_RADIUS);
+    int gridCountOnSide = std::ceil(side / SMOOTHING_RADIUS);
     
     GRID_CELL_COUNT = gridCountOnSide*gridCountOnSide*gridCountOnSide;
 }
