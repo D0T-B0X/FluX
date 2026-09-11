@@ -4,10 +4,13 @@ Physics::Physics(Scene& activeScene)
     : 
     physicsScene(activeScene),
     timeAccumulator(0),
-    workgroupCount(0),
-    timeSum(0.0),
-    iteration(0)
+    workgroupCount(0)
 { 
+    totalStepsTaken = 0;
+    queryIndex = 0;
+    average = 0.0;
+    queryHasResult[0] = queryHasResult[1] = 0;
+
     SMOOTHING_RADIUS = 0.0f;
     gridHashShader.load(GRID_CELL_CSHADER_PATH);
     prefixScanShader.load(LOCAL_PREFIX_SCAN_CSHADER_PATH);
@@ -19,44 +22,54 @@ Physics::Physics(Scene& activeScene)
     pressureShader.load(PRESSURE_CSHADER_PATH);
     forceShader.load(FORCE_CSHADER_PATH);
 
-    glGenQueries(1, &timeQuery);
+    glGenQueries(2, timeQueries);
 }
 
 void 
 Physics::updateFrame() {
-    
-    glFinish();
+    int readIndex = 1 - queryIndex;
+    double resultMs = -1.0;
 
-    glBeginQuery(GL_TIME_ELAPSED, timeQuery);
+    glBeginQuery(GL_TIME_ELAPSED, timeQueries[queryIndex]);
+
     refreshBoundarySSBOs();
     performSpatialHashAndSort();
     reorderParticleBuffers();
     computeCellBoundaries();
     computeSPHUpdates();
-
-    glFinish();
+    
     glEndQuery(GL_TIME_ELAPSED);
-    
-    
-    GLuint64 timeElapsedNs;
-    glGetQueryObjectui64v(timeQuery, GL_QUERY_RESULT, &timeElapsedNs);
-    double time_ms = timeElapsedNs / 1000000.0;
-    // std::cout << "Per frame physics engine execution time: " << time_ms << " ms" << std::endl; 
 
-    if (iteration > 59) timeSum += time_ms;
-    iteration++;
+    if (queryHasResult[readIndex]) {
+        GLint available = 0;
+        glGetQueryObjectiv(timeQueries[readIndex], GL_QUERY_RESULT_AVAILABLE, &available);
+        if (available) {
+            GLuint64 elapsedTime;
+            glGetQueryObjectui64v(timeQueries[readIndex], GL_QUERY_RESULT, &elapsedTime);
+            resultMs = static_cast<double>(elapsedTime) / 1e6;
+            average += resultMs;
+            totalStepsTaken++;
+        }
+    }
+
+    queryHasResult[queryIndex] = 1;
+    queryIndex = 1 - queryIndex;
+}
+
+double
+Physics::getTime() {
+    return average / totalStepsTaken;
 }
 
 void 
 Physics::cleanup() {
     // TODO => Do something with this negro
 
-    // do not consider the first 60 iterations for average
-    std::cout << "Average compute time: " << timeSum / (iteration - 60) << " ms" <<std::endl;
+
 }
 
 void
-Physics::uploadUinforms() {
+Physics::uploadUniforms() {
 
     setGridUniforms();
     setPrefixScanUniforms();
@@ -325,8 +338,6 @@ Physics::computeCellBoundaries() {
 void
 Physics::computeSPHUpdates() {
 
-    glFinish();
-
     // Density calculations pass
     densityShader.use();
     glDispatchCompute(workgroupCount, 1, 1);
@@ -481,7 +492,7 @@ Physics::setForceUniforms() {
 
     forceShader.setFloat("h", SMOOTHING_RADIUS);
     forceShader.setVec3("GRAVITY_C", GRAV_CONSTANT);         // m/s²
-    forceShader.setFloat("mu", VISCOSITY);                      // Pa·s (water)
+    forceShader.setFloat("mu", VISCOSITY);                   // Pa·s (water)
 
     // Spike kernel fn
     float spike = -45 / (M_PI * pow(SMOOTHING_RADIUS, 6));
@@ -496,6 +507,10 @@ Physics::setForceUniforms() {
     forceShader.setFloat("restingDensity", RESTING_DENSITY);
     forceShader.setFloat("minBound", MIN_BOUND);
     forceShader.setFloat("maxBound", MAX_BOUND);
+    forceShader.setFloat("xMinBound", X_CONTAINER_MIN);
+    forceShader.setFloat("xMaxBound", X_CONTAINER_MAX);
+    forceShader.setFloat("zMaxBound", Z_CONTAINER_MAX);
+    forceShader.setFloat("zMinBound", Z_CONTAINER_MIN);
     forceShader.setFloat("damping", DAMPING_COEFF);
     forceShader.setInt("gridSize", gridCountOnSide);
 }

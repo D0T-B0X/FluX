@@ -31,6 +31,10 @@ uniform float damping;
 uniform float floorBound;
 uniform float minBound;
 uniform float maxBound;
+uniform float xMinBound;
+uniform float xMaxBound;
+uniform float zMinBound;
+uniform float zMaxBound;
 uniform int gridSize;
 
 // ------- Timing variables -------
@@ -103,7 +107,7 @@ main() {
 
             float neighbourParticleMass = position_mass[j].w;
             float neighbourParticlePressure = force_pressure[j].w;
-            float neighbourParticleDesnity = velocity_density[j].w;
+            float neighbourParticleDensity = velocity_density[j].w;
 
             vec3 neighbourParticleVelocity = velocity_density[j].xyz;
 
@@ -115,8 +119,12 @@ main() {
             * 
             * f = -mᵢ Σⱼ mⱼ · ((pᵢ + pⱼ) / (2ρⱼ)) · ∇W_spiky(rᵢ - rⱼ, h)
             */
+            float rho_j = neighbourParticleDensity;
+            float rho_i = currentParticleDensity;
+            float p_i = currentParticlePressure;
+            float p_j = neighbourParticlePressure;
             p_force += neighbourParticleMass
-                        * ((currentParticlePressure + neighbourParticlePressure) / (2 * neighbourParticleDesnity))
+                        * ((p_i / (rho_i*rho_i)) + (p_j / (rho_j*rho_j)))
                         * gradW_spike(r, r_len);
 
             /**
@@ -125,7 +133,7 @@ main() {
             * f = μ · mᵢ Σⱼ mⱼ · ((vⱼ - vᵢ) / ρⱼ) · ∇²W_viscosity(r, h)
             */
             v_force += neighbourParticleMass
-                        * ((neighbourParticleVelocity - currentParticleVelocity) / (neighbourParticleDesnity))
+                        * ((neighbourParticleVelocity - currentParticleVelocity) / (neighbourParticleDensity))
                         * laplacianW_viscosity(r_len);
         }
     } 
@@ -147,23 +155,19 @@ main() {
     position_mass[i].y = max(position_mass[i].y, floorBound);
     velocity_density[i].y = mix(velocity_density[i].y, -velocity_density[i].y * damping, belowFloor);
 
-    float aboveCeiling = step(maxBound, position_mass[i].y);
-    position_mass[i].y = min(maxBound, position_mass[i].y);
-    velocity_density[i].y = mix(velocity_density[i].y, -velocity_density[i].y * damping, aboveCeiling);
-    
-    float overLeftEdge = step(position_mass[i].x, minBound);
-    position_mass[i].x = max(position_mass[i].x, minBound);
+    float overLeftEdge = step(position_mass[i].x, xMinBound);
+    position_mass[i].x = max(position_mass[i].x, xMinBound);
     velocity_density[i].x = mix(velocity_density[i].x, -velocity_density[i].x * damping, overLeftEdge);
 
-    float overRightEdge = step(maxBound, position_mass[i].x);
-    position_mass[i].x = min(position_mass[i].x, maxBound);
+    float overRightEdge = step(xMaxBound, position_mass[i].x);
+    position_mass[i].x = min(position_mass[i].x, xMaxBound);
     velocity_density[i].x = mix(velocity_density[i].x, -velocity_density[i].x * damping, overRightEdge);
 
-    float overFront = step(position_mass[i].z, minBound);
-    position_mass[i].z = max(position_mass[i].z, minBound);
+    float overFront = step(position_mass[i].z, zMinBound);
+    position_mass[i].z = max(position_mass[i].z, zMinBound);
     velocity_density[i].z = mix(velocity_density[i].z, -velocity_density[i].z * damping, overFront);
 
-    float overBack = step(maxBound, position_mass[i].z);
-    position_mass[i].z = min(position_mass[i].z, maxBound);
+    float overBack = step(zMaxBound, position_mass[i].z);
+    position_mass[i].z = min(position_mass[i].z, zMaxBound);
     velocity_density[i].z = mix(velocity_density[i].z, -velocity_density[i].z * damping, overBack);
 }

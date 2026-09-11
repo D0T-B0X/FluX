@@ -21,7 +21,7 @@ public:
     void                computeSPHUpdates();
 
     // -------- Engine setup --------
-    void                uploadUinforms();
+    void                uploadUniforms();
     void                setupSSBO(Buffer& b);
     void                initSSBOs();
     void                setWorkGroupCount();
@@ -29,6 +29,7 @@ public:
 // -------- Miscllaneous --------
     unsigned int        getCountBufferDataSize();
     float               getSmoothingRadius();
+    double              getTime();
     void                swapBuffers(Buffer& b, GLuint base);
     void                swapInputAndOutputBuffers(Buffer& in, Buffer& out);
     void                setSmoothingRadius(float s);
@@ -56,9 +57,11 @@ private:
     int                 GRID_CELL_COUNT;
     int                 workgroupCount;
 
-    GLuint              timeQuery;
-    GLuint              iteration;
-    double              timeSum;
+    GLuint              timeQueries[2];
+    GLuint              queryHasResult[2];
+    int                 queryIndex;
+    double              average;
+    uint64_t            totalStepsTaken;
 
     // ------------- Uniform setup -------------
     void                setGridUniforms();

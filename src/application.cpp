@@ -1,10 +1,13 @@
 #include "application.h"
 
+#include <chrono>
+
 App::App() : rEngine(activeScene), pEngine(activeScene) { }
 
 void
 App::run() {  
     glfwSwapInterval(1); 
+
     while (!rEngine.shouldEnd()) {
         
         // get real time difference between frames
@@ -13,20 +16,21 @@ App::run() {
         activeScene.dt = activeScene.currTime - activeScene.lastTime;
         activeScene.lastTime = activeScene.currTime;
 
-        if (activeScene.dt > 0.25) {
-            activeScene.dt = 0.25; 
-        }
-
         pEngine.timeAccumulator += activeScene.dt;
 
+        int stepsThisFrame = 0;
+        constexpr int MAX_SUBSTEP_COUNT = 8;
+
         // Advance physics engine in a pre-defined fixed timestep
-        while (pEngine.timeAccumulator >= PHYSICS_DT) {
+        while (pEngine.timeAccumulator >= PHYSICS_DT && stepsThisFrame <= MAX_SUBSTEP_COUNT) {
             pEngine.updateFrame();
             pEngine.timeAccumulator -= PHYSICS_DT;
         }
 
         rEngine.renderFrame();
     }
+
+    std::cout << "Average compute time: " << pEngine.getTime() << " ms" << std::endl;
 
     rEngine.cleanup();
     pEngine.cleanup();
@@ -103,7 +107,7 @@ App::init() {
     // Physics setup
     pEngine.setWorkGroupCount();    
     pEngine.initSSBOs();
-    pEngine.uploadUinforms();
+    pEngine.uploadUniforms();
 
 
 #ifdef DEBUG
